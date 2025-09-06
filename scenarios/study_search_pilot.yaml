@@ -1,0 +1,16 @@
+study_search:
+  assurance_target: 0.8
+  human_hourly_rate: 150.0
+  task_prep_hours_per_task: 0.5
+  model_cost_per_attempt: 0.0
+
+  # Small, high-impact grid
+  attempts_per_pair: [40, 60, 80]
+  tasks_per_bin: [4, 6]
+  n_participants: [10, 14]
+  repeats_per_condition: [1, 2]
+
+  # Replicates and seeding
+  seeds: 5
+  base_seed: 123
+

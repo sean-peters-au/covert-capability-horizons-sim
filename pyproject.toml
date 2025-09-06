@@ -1,0 +1,40 @@
+[project]
+name = "cch-sim"
+version = "0.0.1"
+description = "Covert Capability Horizons simulation: clean, CLI-first, with optional site viewer."
+requires-python = ">=3.11,<3.13"
+readme = "README.md"
+authors = [{ name = "Your Team" }]
+
+dependencies = [
+  "numpy>=1.26,<3.0",
+  "pandas>=2.2,<3.0",
+  "matplotlib>=3.8,<4.0",
+  "pyyaml>=6.0,<7.0",
+  "tqdm>=4.66,<5.0",
+  "arviz>=0.16,<0.19",
+  "numpyro>=0.13,<0.15",
+  "jax>=0.4.23,<0.5",
+  "jaxlib>=0.4.23,<0.5",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.2,<9.0",
+]
+
+[dependency-groups]
+test = [
+  "pytest>=8.2,<9.0",
+]
+
+[project.scripts]
+cch-sim = "cch_sim.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+default-groups = ["test"]
+package = false

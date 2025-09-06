@@ -1,0 +1,76 @@
+scenarios:
+  - name: pilot_signal
+    cfg:
+      seed: 1337
+
+      # Human T bins: ~30s → 60 min
+      n_t_bins: 7
+      t_seconds_min: 30
+      t_seconds_max: 3600
+      tasks_per_bin: 6
+
+      # Covert overhead bins (seconds): 1s → 10m
+      c_over_bins:
+        - { lo_s: 1,   hi_s: 5 }
+        - { lo_s: 5,   hi_s: 10 }
+        - { lo_s: 10,  hi_s: 20 }
+        - { lo_s: 20,  hi_s: 45 }
+        - { lo_s: 45,  hi_s: 120 }
+        - { lo_s: 120, hi_s: 300 }
+        - { lo_s: 300, hi_s: 600 }
+
+      # Per‑T‑bin mixes (sum to 1.0). Bracket early Δ with 1–5s/5–10s; tilt rightward on longer T.
+      c_over_mix_by_t_bin:
+        - [0.25, 0.30, 0.20, 0.15, 0.07, 0.02, 0.01]
+        - [0.15, 0.30, 0.25, 0.15, 0.10, 0.04, 0.01]
+        - [0.10, 0.20, 0.30, 0.20, 0.12, 0.06, 0.02]
+        - [0.06, 0.12, 0.22, 0.28, 0.20, 0.08, 0.04]
+        - [0.04, 0.08, 0.18, 0.26, 0.24, 0.12, 0.08]
+        - [0.03, 0.06, 0.12, 0.22, 0.27, 0.18, 0.12]
+        - [0.02, 0.05, 0.10, 0.18, 0.25, 0.22, 0.18]
+      c_over_sample: log_uniform
+
+      # Human sampling & dispersion (moderate noise; realistic but not extreme)
+      n_participants: 14
+      repeats_per_condition: 2
+      sigma_task: 0.22           # ≈ ±25% multiplicative spread across tasks
+      sigma_participant: 0.18    # ≈ ±20% across participants
+      sigma_noise: 0.18          # ≈ ±20% per observation
+      human_skill_sd: 0.5        # modest ability variation for covert
+      human_cov_alpha: -1.2      # low baseline censoring at small Δ
+      human_cov_beta: 1.0        # censoring increases with Δ
+
+      # Model success vs Δ (seconds)
+      sc_alpha: 0.0
+      sc_beta: 1.5
+
+      # Models: 3-year trend, doubling every 6 months from 5s start
+      models_mode: trend
+      n_models_auto: 10
+      trend_start_month: 202308
+      trend_end_month:   202608
+      trend_start_delta_s: 5.0      # start Δ50 in seconds (preferred key)
+      trend_doubling_months: 6.0
+      trend_noise_sd_log: 0.08      # a little noisier than low-noise scenario
+
+      # Monitor (optional; ultra‑low FPR; simplified sensitivity)
+      monitors:
+        - { id: M0, fpr_target: 0.0001, det_b1: 2.2, eta: 0.25 }
+
+      # Attempts and bootstrap
+      attempts_per_pair: 60      # moderate; tighten precision without over‑spending
+      n_boot: 200
+
+gates:
+  # Δ50 precision: a bit looser than low‑noise pilot
+  delta50_max_ci_width_s: 90.0
+  # Δ50 identifiability: ensure most Δ50 draws are inside observed Δ range
+  d50_min_fraction_in_range: 0.75
+  # Δ50 trend recovery: true doubling months within CI (with reasonable width)
+  delta50_true_doubling_months: 6.0
+  delta50_dm_rel_factor: 1.33
+  delta50_dm_min_prob_in_window: 0.6
+  delta50_dm_rel_width_max: 0.6
+  # Trend threshold (reported probability only)
+  trend_max_doubling_months: 9.0
+

@@ -1,0 +1,70 @@
+scenarios:
+  - name: pilot_signal_low_noise
+    cfg:
+      seed: 4242
+
+      # Human T bins: 30s → 60 min
+      n_t_bins: 7
+      t_seconds_min: 30
+      t_seconds_max: 3600
+      tasks_per_bin: 6
+
+      # Covert overhead bins (seconds): 5s → 10m
+      c_over_bins:
+        - { lo_s: 1,   hi_s: 5 }
+        - { lo_s: 5,   hi_s: 10 }
+        - { lo_s: 10,  hi_s: 20 }
+        - { lo_s: 20,  hi_s: 45 }
+        - { lo_s: 45,  hi_s: 120 }
+        - { lo_s: 120, hi_s: 300 }
+        - { lo_s: 300, hi_s: 600 }
+      # Tilt mixes rightward on longer T
+      c_over_mix_by_t_bin:
+        # Shortest T: emphasize 1–5s and 5–10s to bracket early Δ50
+        - [0.30, 0.35, 0.20, 0.10, 0.05, 0.00, 0.00]
+        # Next bin: still tilted to low Δ
+        - [0.20, 0.35, 0.25, 0.15, 0.05, 0.00, 0.00]
+        # Mid-short: add small mass to 1–5s, keep right tilt growing
+        - [0.10, 0.25, 0.30, 0.20, 0.10, 0.05, 0.00]
+        - [0.05, 0.15, 0.25, 0.30, 0.20, 0.05, 0.00]
+        - [0.05, 0.10, 0.15, 0.25, 0.30, 0.10, 0.05]
+        - [0.03, 0.07, 0.20, 0.35, 0.20, 0.10, 0.05]
+        - [0.03, 0.07, 0.10, 0.25, 0.30, 0.15, 0.10]
+      c_over_sample: log_uniform
+
+      # Human sampling & dispersion (low noise)
+      n_participants: 14
+      repeats_per_condition: 2
+      sigma_task: 0.10
+      sigma_participant: 0.08
+      sigma_noise: 0.08
+      human_skill_sd: 0.2
+      human_cov_alpha: -2.0
+      human_cov_beta: 1.0
+
+      # Model success vs Δ (seconds)
+      sc_alpha: 0.0
+      sc_beta: 1.5
+
+      # Models: 3-year trend, doubling every 6 months from 5s start
+      models_mode: trend
+      n_models_auto: 10
+      trend_start_month: 202308
+      trend_end_month:   202608
+      trend_start_h50_s: 5.0
+      trend_doubling_months: 6.0
+      trend_noise_sd_log: 0.06
+
+      # Monitor (optional; UL-FPR; simplified sensitivity)
+      monitors:
+        - { id: M0, fpr_target: 0.0001, det_b1: 2.2, eta: 0.25 }
+
+      attempts_per_pair: 80
+      n_boot: 200
+
+gates:
+  delta50_max_ci_width_s: 60.0
+  d50_min_fraction_in_range: 0.8
+  delta50_true_doubling_months: 6.0
+  delta50_dm_max_ci_width: 3.0
+  trend_max_doubling_months: 9.0
