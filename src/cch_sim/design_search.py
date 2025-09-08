@@ -1,3 +1,5 @@
+"""Automated design search with explicit cost modeling and assurance gates."""
+
 from __future__ import annotations
 
 import copy
@@ -16,16 +18,12 @@ from .core.detection import apply_detection_models
 from .core.humans import simulate_humans
 from .core.models import generate_models, simulate_model_attempts
 from .core.tasks import generate_tasks
-from .gates import (
-    delta50_in_range_gate,
-    delta50_precision_gate,
-    trend_recovery_rope_gate,
-)
+from .gates import delta50_in_range_gate, delta50_precision_gate, trend_recovery_rope_gate
 from .pipeline import sample_humans_posterior, sample_models_posterior, sample_trend_posterior
 
 
 def _mix_seed(base_seed: int, a: int, b: int) -> int:
-    """Deterministic 32-bit integer hash from three ints (no Python hash())."""
+    """Deterministic 32‑bit integer hash from three integers."""
     x = (int(base_seed) & 0xFFFFFFFF) ^ 0x9E3779B9
     x = (x * 0x85EBCA6B) & 0xFFFFFFFF
     x ^= (int(a) & 0xFFFFFFFF) * 0xC2B2AE35 & 0xFFFFFFFF
@@ -35,11 +33,7 @@ def _mix_seed(base_seed: int, a: int, b: int) -> int:
 
 
 def _minutes_per_run_from_humans_draws(draws: Dict[str, Any]) -> float:
-    """Compute minutes per task-run = median(T) + median(T+C), then convert to minutes.
-
-    Uses Stage-1 posterior draws: tT_s [n_tasks, S], Delta_s [n_tasks, S] (seconds).
-    Returns a single scalar minutes per task-run (typical task), using median across tasks.
-    """
+    """Compute minutes per task‑run from Stage‑1 draws (typical task)."""
     tT = np.asarray(draws.get("tT_s"), float)  # [n_tasks, S]
     D = np.asarray(draws.get("Delta_s"), float)
     if tT.size == 0 or D.size == 0:
@@ -101,7 +95,7 @@ def _active_gate_keys(gates: Dict[str, Any]) -> List[str]:
 
 
 def _fallback_minutes_per_run(cfg: SimConfig) -> float:
-    # 2*T_median + Δ_median (seconds) → minutes
+    """Heuristic minutes per run (2*T_median + Δ_median) used on failure."""
     t_med = math.sqrt(float(cfg.t_seconds_min) * float(cfg.t_seconds_max))
     if cfg.c_over_bins:
         mids = [
@@ -195,7 +189,7 @@ def _eval_candidate_seed(
         )
         models_mon["monitor_id"] = mon.id
 
-        # Stage 2 and trend
+        # Stage‑2 and trend
         m_draws = sample_models_posterior(
             models_mon,
             h_draws,
@@ -215,7 +209,7 @@ def _eval_candidate_seed(
             priors={"seed": cfg.seed, "num_warmup_trend": 200, "num_samples_trend": 200},
         )
 
-        # Gates
+        # Gates (precision, in‑range, trend‑ROPE)
         g_pass: Dict[str, bool] = {}
         # Δ50 precision (pass if any model meets width threshold)
         max_w = float(gates.get("delta50_max_ci_width_s", math.nan))
@@ -290,7 +284,7 @@ def _eval_candidate_seed(
 
 
 def _compute_pareto(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Compute non-dominated set: minimize cost_total, maximize assurance."""
+    """Compute non‑dominated set: minimize cost_total, maximize assurance."""
     pareto: List[Dict[str, Any]] = []
     for r in rows:
         dominated = False
@@ -316,7 +310,7 @@ def _compute_pareto(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def _select_min_cost_feasible(
     rows: List[Dict[str, Any]], assurance_target: float
 ) -> Tuple[Dict[str, Any] | None, bool]:
-    """Return (best_row, feasible). If none meet target, return highest assurance and feasible=False."""
+    """Return (best_row, feasible). Fallback to highest assurance if none feasible."""
     feas = [r for r in rows if float(r["assurance"]) >= float(assurance_target)]
     if feas:
         best = min(feas, key=lambda r: float(r["cost_total"]))
@@ -331,14 +325,9 @@ def _select_min_cost_feasible(
 def run(
     scenario_cfg: SimConfig, gates: Dict[str, Any], search_cfg: Dict[str, Any], out_dir: str
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """Run automated design search.
+    """Execute the grid search and write outputs.
 
-    - scenario_cfg: base SimConfig for the scenario (will be copied per candidate/seed)
-    - gates: dict of gate thresholds (Δ50 precision, identifiability, trend ROPE)
-    - search_cfg: dict under 'study_search' with grid, costs, seeds, base_seed
-    - out_dir: directory to write outputs
-
-    Returns (best_design_row, all_rows)
+    Returns the best design row (or empty dict) and the full list of rows.
     """
     os.makedirs(out_dir, exist_ok=True)
 

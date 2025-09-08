@@ -1,4 +1,4 @@
-.PHONY: help py lock sync test run sweep clean
+.PHONY: help py lock sync format lint typecheck test run sweep pilot-design clean
 
 PY ?= 3.11
 
@@ -13,6 +13,7 @@ help:
 	@echo "  make test   # run pytest"
 	@echo "  make run    # example simulate run"
 	@echo "  make sweep  # example sweep run"
+	@echo "  make pilot-design # pilot design search + plots"
 	@echo "  make clean  # remove .venv and cache"
 
 py:
@@ -43,6 +44,15 @@ run:
 
 sweep:
 	uv run -m cch_sim.cli sweep --scenarios scenarios/example.yaml --out out/sweep
+
+# Pilot design search (scenario + grid from scenarios/)
+PILOT_SCENARIO ?= scenarios/pilot_signal.yaml
+PILOT_SEARCH   ?= scenarios/study_search_pilot.yaml
+PILOT_OUT      ?= out/design_search_pilot_signal
+
+pilot-design:
+	uv run -m cch_sim.cli design-search --scenario $(PILOT_SCENARIO) --search $(PILOT_SEARCH) --out $(PILOT_OUT)
+	uv run python scripts/make_plots.py --run-dir $(PILOT_OUT)
 
 clean:
 	rm -rf .venv

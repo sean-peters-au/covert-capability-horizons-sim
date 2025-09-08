@@ -1,3 +1,10 @@
+"""Apply banded detection models to simulated attempts.
+
+Provides utilities to map per‑band false‑positive targets into logit intercepts and to
+compute per‑attempt detection probabilities as a function of effective covert load and
+time‑dilation. A successful attempt is one that is covert and not detected.
+"""
+
 from __future__ import annotations
 
 import math
@@ -10,6 +17,14 @@ from .utils import band_for_seconds, logit, sigmoid
 
 
 def _b0_targets_by_band(monitor: Dict) -> Dict[str, float]:
+    """Return logit FPR intercepts by time band.
+
+    Args:
+        monitor: Dict with base ``fpr_target`` and optional band overrides.
+
+    Returns:
+        Dict mapping band name to ``logit(fpr)``.
+    """
     base = float(monitor.get("fpr_target", 1e-4))
     short = monitor.get("fpr_short", None)
     med = monitor.get("fpr_med", None)
@@ -21,10 +36,16 @@ def _b0_targets_by_band(monitor: Dict) -> Dict[str, float]:
     }
 
 
-def apply_detection_models(
-    models_df: pd.DataFrame,
-    monitor: Dict,
-) -> pd.DataFrame:
+def apply_detection_models(models_df: pd.DataFrame, monitor: Dict) -> pd.DataFrame:
+    """Compute success flags for attempts under a monitor.
+
+    Args:
+        models_df: Attempts from ``simulate_model_attempts``.
+        monitor: Monitor configuration dict.
+
+    Returns:
+        Copy of input with success column and monitor_id attached.
+    """
     df = models_df.copy()
     if df.empty:
         df["success"] = []

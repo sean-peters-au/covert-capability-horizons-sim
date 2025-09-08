@@ -1,3 +1,5 @@
+"""Integration helpers for writing and aggregating assurance tables."""
+
 from __future__ import annotations
 
 import json
@@ -12,9 +14,14 @@ from .assurance import assurance_all_gates
 def aggregate_assurance_for_design(
     design_id: str, pass_records: List[Dict[str, bool]]
 ) -> Dict[str, object]:
-    """Aggregate assurance for a single design from per-seed gate pass records.
+    """Aggregate assurance for a single design from per‑seed gate pass records.
 
-    Returns a flat dict suitable for CSV/JSON rows.
+    Args:
+        design_id: Identifier (e.g., scenario|monitor).
+        pass_records: One dict per seed with gate pass booleans.
+
+    Returns:
+        Flat dict suitable for CSV/JSON rows.
     """
     out = assurance_all_gates(pass_records)
     row: Dict[str, object] = {
@@ -34,7 +41,11 @@ def aggregate_assurance_table(
 ) -> List[Dict[str, object]]:
     """Aggregate assurance rows for multiple designs.
 
-    Returns a list of flat rows suitable for CSV/JSON.
+    Args:
+        design_records: Mapping design_id → list of per‑seed gate pass dicts.
+
+    Returns:
+        List of flat rows suitable for CSV/JSON.
     """
     rows: List[Dict[str, object]] = []
     for design_id in sorted(design_records.keys()):
@@ -45,7 +56,16 @@ def aggregate_assurance_table(
 def write_assurance_table(
     rows: List[Dict[str, object]], out_dir: str | Path, basename: str = "assurance"
 ) -> Dict[str, str]:
-    """Write assurance rows to CSV and JSON; returns paths written."""
+    """Write assurance rows to CSV and JSON.
+
+    Args:
+        rows: Rows from ``aggregate_assurance_table``.
+        out_dir: Directory to write outputs.
+        basename: Filename base (without extension).
+
+    Returns:
+        Dict with paths to the written CSV and JSON files.
+    """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     p_csv = out / f"{basename}.csv"

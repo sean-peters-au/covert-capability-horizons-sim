@@ -1,3 +1,10 @@
+"""Model list generation and model‑attempt simulation.
+
+Provides utilities to construct a list of model descriptors (either explicit/custom
+or synthesized via a simple exponential trend over release months), and to simulate
+model attempts across tasks with a logistic success curve on absolute Δ seconds.
+"""
+
 from __future__ import annotations
 
 from typing import Dict, List
@@ -9,14 +16,25 @@ from .utils import sigmoid
 
 
 def _ym_to_frac_year(yyyymm: int) -> float:
+    """Convert an integer ``YYYYMM`` to a fractional year (e.g., 2024‑07 → 2024.5)."""
     y = int(yyyymm) // 100
     m = int(yyyymm) % 100
     return y + (m - 1) / 12.0
 
 
 def generate_models(cfg: Dict, rng: np.random.Generator) -> List[Dict]:
+    """Generate model descriptors in custom or trend mode.
+
+    Args:
+        cfg: Configuration dict (expects keys documented in ``SimConfig``).
+        rng: Random generator (used only in trend mode for noise).
+
+    Returns:
+        List of dicts: ``{"model_id", "release_month", "ability_seconds"}``.
+    """
     mode = str(cfg.get("models_mode", "custom")).lower()
     if mode == "custom":
+        # Explicit model list supplied in config.
         out = []
         for i, m in enumerate(cfg.get("models", [])):
             # Accept ability in seconds (preferred) or minutes (legacy); convert to seconds.
@@ -37,6 +55,7 @@ def generate_models(cfg: Dict, rng: np.random.Generator) -> List[Dict]:
             )
         return out
     if mode == "trend":
+        # Synthesize releases between start and end months with exponential growth in Δ50.
         n = int(cfg.get("n_models_auto", 5))
         start = int(cfg.get("trend_start_month", 202101))
         end = int(cfg.get("trend_end_month", 202508))
@@ -71,6 +90,23 @@ def simulate_model_attempts(
     sc_beta: float,
     attempts_per_pair: int,
 ) -> pd.DataFrame:
+    """Simulate attempts for each ``(model, task)`` pair.
+
+    The per‑attempt success probability follows a logistic curve on absolute Δ seconds
+    (larger Δ is harder → lower success probability). This function emits latent
+    uniforms ``u_cov`` and ``u_det`` suitable for downstream detection modeling.
+
+    Args:
+        rng: Random generator.
+        tasks: DataFrame of tasks from ``generate_tasks``.
+        models: List of model descriptors from ``generate_models``.
+        sc_alpha: Intercept for model success curve (logit scale).
+        sc_beta: Slope per second for model success curve (logit scale).
+        attempts_per_pair: Attempts per model‑task pair.
+
+    Returns:
+        Long DataFrame, one row per attempt, including per‑attempt Δ seconds.
+    """
     rows = []
     for m in models:
         for _, trow in tasks.iterrows():

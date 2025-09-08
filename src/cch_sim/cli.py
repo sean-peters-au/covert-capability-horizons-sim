@@ -1,3 +1,5 @@
+"""Command‑line interface for running simulations, sweeps, and design searches."""
+
 from __future__ import annotations
 
 import argparse
@@ -9,6 +11,7 @@ from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
+
 try:
     import yaml  # type: ignore[import-untyped]
 except Exception:  # pragma: no cover - optional runtime dependency
@@ -26,6 +29,14 @@ from .pipeline import sample_humans_posterior, sample_models_posterior, sample_t
 
 
 def _load_yaml_or_json(path: str) -> Dict[str, Any]:
+    """Load a YAML or JSON file into a plain dict.
+
+    Args:
+        path: Path to a ``.yaml/.yml`` or ``.json`` file.
+
+    Returns:
+        Dict parsed from the file.
+    """
     p = Path(path)
     txt = p.read_text(encoding="utf-8")
     if p.suffix.lower() in {".yaml", ".yml"}:
@@ -36,12 +47,14 @@ def _load_yaml_or_json(path: str) -> Dict[str, Any]:
 
 
 def cmd_simulate(args: argparse.Namespace) -> None:
+    """Run a single end‑to‑end simulation and write artifacts to disk."""
+    # 1) Load and validate configuration
     cfg_raw = _load_yaml_or_json(args.config)
     cfg = _cfg_from_dict(cfg_raw)
     cfg.validate()
     os.makedirs(args.out, exist_ok=True)
     (Path(args.out) / "config.normalized.json").write_text(json.dumps(_cfg_to_dict(cfg), indent=2))
-    # Build data with existing generators
+    # 2) Generate synthetic data: tasks → humans
     tasks = generate_tasks(
         seed=cfg.seed,
         n_t_bins=cfg.n_t_bins,
@@ -64,7 +77,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
         human_cov_alpha=cfg.human_cov_alpha,
         human_cov_beta=cfg.human_cov_beta,
     )
-    # Stage 1 posterior
+    # 3) Stage‑1 posterior (humans)
     humans_draws = sample_humans_posterior(
         humans,
         priors={
@@ -77,6 +90,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
         },
     )
 
+    # 4) Build models and simulate attempts (with detection)
     models_list = generate_models(cfg.__dict__, np.random.default_rng(cfg.seed))
     attempts = simulate_model_attempts(
         rng=np.random.default_rng(cfg.seed),
@@ -101,7 +115,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
     )
     models_mon["monitor_id"] = mon0.id
 
-    # Stage 2 posterior
+    # 5) Stage‑2 posterior (Δ50 per model/monitor)
     mod_draws = sample_models_posterior(
         models_mon,
         humans_draws,
@@ -114,7 +128,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
             "max_tree_depth": 14,
         },
     )
-    # Trend posterior
+    # 6) Trend posterior (per monitor)
     rel_map = {m["model_id"]: int(m.get("release_month", 0)) for m in models_list}
     trend = sample_trend_posterior(
         mod_draws,
@@ -122,7 +136,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
         priors={"seed": cfg.seed, "num_warmup_trend": 200, "num_samples_trend": 200},
     )
 
-    # Write outputs
+    # 7) Write outputs (Δ50 summaries, trend summaries, coverage checks)
     def ci_from_draws(arr):
         v = np.array(arr, float)
         if v.size == 0:
@@ -208,6 +222,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
 
 
 def cmd_sweep(args: argparse.Namespace) -> None:
+    """Run a sweep over scenarios and compute gate‑based assurance per design."""
     data = _load_yaml_or_json(args.scenarios)
     scenarios = data.get("scenarios", [])
     gates = data.get("gates", {})
@@ -440,6 +455,7 @@ def cmd_sweep(args: argparse.Namespace) -> None:
 
 
 def cmd_design_search(args: argparse.Namespace) -> None:
+    """Run automated design search for one scenario and write plots/CSV."""
     data = _load_yaml_or_json(args.scenario)
     scenarios = data.get("scenarios", [])
     if not scenarios:
@@ -465,6 +481,7 @@ def cmd_design_search(args: argparse.Namespace) -> None:
 
 
 def _cfg_from_dict(d: Dict[str, Any]) -> SimConfig:
+    """Construct a ``SimConfig`` from a raw dict (YAML/JSON)."""
     mons = d.get("monitors")
     if mons is None:
         monitors = [MonitorConfig()]
@@ -526,6 +543,7 @@ def _cfg_from_dict(d: Dict[str, Any]) -> SimConfig:
 
 
 def _cfg_to_dict(cfg: SimConfig) -> Dict[str, Any]:
+    """Render a ``SimConfig`` to a JSON‑serializable dict."""
     return {
         "n_t_bins": cfg.n_t_bins,
         "tasks_per_bin": cfg.tasks_per_bin,
@@ -580,6 +598,7 @@ def _cfg_to_dict(cfg: SimConfig) -> Dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the top‑level argument parser and subcommands."""
     p = argparse.ArgumentParser(prog="cch-sim", description="Covert Capability Horizons simulation")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -604,6 +623,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Entry point for the ``cch-sim`` command."""
     p = build_parser()
     args = p.parse_args(argv)
     args.func(args)

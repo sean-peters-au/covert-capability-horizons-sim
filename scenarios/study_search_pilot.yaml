@@ -4,13 +4,12 @@ study_search:
   task_prep_hours_per_task: 0.5
   model_cost_per_attempt: 0.0
 
-  # Small, high-impact grid
-  attempts_per_pair: [40, 60, 80]
-  tasks_per_bin: [4, 6]
-  n_participants: [10, 14]
-  repeats_per_condition: [1, 2]
+  # Expanded grid, aiming to span ~$5k–$30k study costs
+  attempts_per_pair: [20, 30, 40, 50, 60, 80, 100]
+  tasks_per_bin: [3, 4, 5, 6, 8]
+  n_participants: [8, 10, 12, 15]
+  repeats_per_condition: [1, 2, 3]
 
   # Replicates and seeding
-  seeds: 5
+  seeds: 3
   base_seed: 123
-

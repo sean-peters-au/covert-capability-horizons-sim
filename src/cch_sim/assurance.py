@@ -1,3 +1,5 @@
+"""Assurance aggregation utilities."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -6,8 +8,12 @@ import numpy as np
 def assurance_all_gates(pass_records: list[dict[str, bool]]) -> dict[str, float | dict[str, float]]:
     """Compute assurance as the fraction of seeds where all gates pass.
 
-    pass_records: list of dicts per seed, e.g., [{"h50": True, "coverage": False}, ...]
-    Returns: {"assurance": float, "per_gate_rate": {gate: rate}}
+    Args:
+        pass_records: One dict per seed, e.g., ``[{"h50": True, "coverage": False}, ...]``.
+
+    Returns:
+        Dict with overall assurance and per‑gate pass rates:
+        ``{"assurance": float, "per_gate_rate": {gate: rate}}``.
     """
     if not pass_records:
         return {"assurance": float("nan"), "per_gate_rate": {}}

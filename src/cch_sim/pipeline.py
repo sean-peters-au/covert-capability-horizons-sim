@@ -1,16 +1,15 @@
-"""
-Bayesian simulation pipeline (single, simple path):
+"""Bayesian simulation pipeline (single, simple path).
 
-log inside (humans, log-seconds) → absolute outside (Δ seconds, models) → trend on log(Δ50).
+Flow:
+- Stage 1 (humans): log‑seconds with censoring → posterior draws for per‑task baselines
+  and covert seconds (Δ per task).
+- Stage 2 (models): logistic on absolute Δ seconds → posterior draws for Δ50 per
+  model/monitor.
+- Stage 3 (trend): per‑draw OLS on ``log(Δ50)`` vs release date → posterior for slope
+  and doubling months.
 
-This module defines three pure functions. They import NumPyro/JAX/ArviZ lazily
-so the rest of the codebase can import this file without requiring those
-dependencies until you actually call the sampling functions.
-
-Functions
-- sample_humans_posterior(humans_df, priors) -> dict with draws for tT_s[j,k], Δ_s[j,k]
-- sample_models_posterior(attempts_df, draws_humans, priors) -> dict with draws for Δ50_s
-- sample_trend_posterior(metric_draws, release_months, priors) -> dict with slope/doubling-months draws
+NumPyro/JAX/ArviZ are imported lazily inside the sampling functions so that importing
+this module does not require those dependencies until a sampling function is invoked.
 """
 
 from __future__ import annotations
@@ -37,18 +36,23 @@ def _require_numpyro():
 def sample_humans_posterior(
     humans_df: pd.DataFrame, priors: Dict[str, Any] | None = None
 ) -> Dict[str, Any]:
-    """Sample the Bayesian censored hierarchical log‑time model for humans.
+    """Sample the censored hierarchical log‑time model for humans.
 
-    Returns a dict with:
-      - tasks: list of task_ids in model order
-      - draws: K posterior draws
-      - tT_s: array [n_tasks, K] baseline seconds per task per draw
-      - Delta_s: array [n_tasks, K] covert seconds per task per draw
+    Args:
+        humans_df: Long table of human observations with columns
+            ``participant_id``, ``task_id``, ``condition`` (``"T"`` or ``"T+C"``),
+            ``log_t_obs`` and optionally ``censored`` (0/1).
+        priors: Optional overrides for sampler settings and prior scales.
 
-    Raises RuntimeError if NumPyro/JAX/ArviZ not installed.
+    Returns:
+        Dict containing task order and arrays of posterior draws:
+        ``{"tasks", "draws", "tT_s" [n_tasks, S], "Delta_s" [n_tasks, S]}``.
+
+    Raises:
+        RuntimeError: If NumPyro/JAX/ArviZ are not installed.
     """
     _require_numpyro()
-    # Lazy imports inside function
+    # Lazy imports to avoid hard dependency at import time
     import arviz as az
     import jax
     import jax.numpy as jnp
@@ -63,38 +67,44 @@ def sample_humans_posterior(
         raise ValueError("humans_df missing required columns")
 
     tasks = sorted(df["task_id"].unique().tolist())
-    # parts = sorted(df["participant_id"].unique().tolist())
+    parts = sorted(df["participant_id"].astype(str).unique().tolist())
     tmap = {t: i for i, t in enumerate(tasks)}
     tj = df["task_id"].map(tmap).to_numpy()
+    pmap = {p: i for i, p in enumerate(parts)}
+    pi = df["participant_id"].astype(str).map(pmap).to_numpy()
     zc = (df["condition"].astype(str) == "T+C").astype(int).to_numpy()
     y = df["log_t_obs"].astype(float).to_numpy()
     cens = df.get("censored", 0)
     cens = cens.astype(int).to_numpy()
 
     n_tasks = len(tasks)
+    n_parts = len(parts)
 
     p = priors or {}
 
-    def model(y, tj, zc, cens):
+    def model(y, tj, zc, cens, pi):
         # Priors
         mu = numpyro.sample("mu", dist.Normal(0.0, p.get("mu_sd", 2.0)))
         sigma = numpyro.sample("sigma", dist.HalfNormal(p.get("sigma_sd", 0.5)))
 
         tau_task = numpyro.sample("tau_task", dist.HalfNormal(p.get("tau_task_sd", 0.3)))
         tau_d = numpyro.sample("tau_d", dist.HalfNormal(p.get("tau_d_sd", 0.2)))
+        tau_part = numpyro.sample("tau_part", dist.HalfNormal(p.get("tau_part_sd", 0.3)))
 
         a_task_raw = numpyro.sample("a_task_raw", dist.Normal(0, 1).expand([n_tasks]).to_event(1))
         d_task_raw = numpyro.sample("d_task_raw", dist.Normal(0, 1).expand([n_tasks]).to_event(1))
+        part_raw = numpyro.sample("part_raw", dist.Normal(0, 1).expand([n_parts]).to_event(1))
 
-        # Sum-to-zero constraints to reduce location non-identifiability
+        # Sum-to-zero constraints to reduce location non‑identifiability
         a_task = (a_task_raw - jnp.mean(a_task_raw)) * tau_task
         d_task = (d_task_raw - jnp.mean(d_task_raw)) * tau_d
+        u_part = (part_raw - jnp.mean(part_raw)) * tau_part
 
         betaC = numpyro.sample(
             "betaC", dist.Normal(p.get("betaC_loc", 0.3), p.get("betaC_sd", 0.25))
         )
 
-        mean = mu + a_task[tj] + (betaC + d_task[tj]) * zc
+        mean = mu + a_task[tj] + u_part[pi] + (betaC + d_task[tj]) * zc
 
         # Base likelihood via obs; then adjust censored rows to use survival contribution
         z = (y - mean) / sigma
@@ -120,7 +130,7 @@ def sample_humans_posterior(
         num_samples=int(p.get("num_samples", 800)),
         num_chains=int(p.get("num_chains", 4)),
     )
-    mcmc.run(jax.random.PRNGKey(int(p.get("seed", 0))), y=y, tj=tj, zc=zc, cens=cens)
+    mcmc.run(jax.random.PRNGKey(int(p.get("seed", 0))), y=y, tj=tj, zc=zc, cens=cens, pi=pi)
     samples = mcmc.get_samples(group_by_chain=False)
     # Diagnostics
     idata = az.from_numpyro(mcmc)
@@ -157,7 +167,24 @@ def sample_humans_posterior(
     # Transpose to [n_tasks, S]
     tT_s = base_t.T
     Delta_s = Delta.T
-    return dict(tasks=tasks, draws=tT_s.shape[1], tT_s=tT_s, Delta_s=Delta_s)
+
+    # Posterior summaries for testing/diagnostics
+    def _med(name: str) -> float:
+        try:
+            v = np.asarray(samples[name], dtype=float)
+            return float(np.median(v)) if v.size > 0 else float("nan")
+        except Exception:
+            return float("nan")
+
+    post_summ = {
+        "sigma_median": _med("sigma"),
+        "tau_task_median": _med("tau_task"),
+        "tau_d_median": _med("tau_d"),
+        "tau_part_median": _med("tau_part"),
+        "betaC_median": _med("betaC"),
+    }
+
+    return dict(tasks=tasks, draws=tT_s.shape[1], tT_s=tT_s, Delta_s=Delta_s, post_summ=post_summ)
 
 
 def sample_models_posterior(
@@ -165,11 +192,16 @@ def sample_models_posterior(
 ) -> Dict[str, Any]:
     """Sample Bayesian logistic on absolute Δ seconds for each model/monitor.
 
-    Returns a dict with per model/monitor:
-      - draws: K posterior draws
-      - delta50_s_draws: [K] seconds per model/monitor (Δ50)
+    Args:
+        attempts_df: Long table of attempts (output of model simulation + detection).
+        humans_draws: Posterior draws from Stage 1 (used for units/compatibility only).
+        priors: Optional overrides for sampler settings and prior scales.
 
-    Raises RuntimeError if NumPyro/ArviZ not installed.
+    Returns:
+        Dict containing ``{"delta50_s_draws": {"mon:model": array([S])}}``.
+
+    Raises:
+        RuntimeError: If NumPyro/ArviZ are not installed.
     """
     _require_numpyro()
     import arviz as az
@@ -282,11 +314,17 @@ def sample_trend_posterior(
     release_months: dict[str, int],
     priors: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Compute per-monitor trend of log(series seconds) vs release month using per-draw OLS.
+    """Compute per‑monitor trend of log(series seconds) vs release month using per‑draw OLS.
 
-    Returns a dict with posterior draws for slope and doubling months, plus summaries.
+    Args:
+        metric_draws: Dict containing per‑model series draws (e.g., Δ50) keyed by
+            ``"mon:model"``.
+        release_months: Mapping ``model_id → YYYYMM``.
+        priors: Unused placeholder to mirror other stage signatures.
 
-    Series units are seconds (Δ50 by default); slopes are per year on log-seconds; doubling months is 12*ln(2)/slope for positive slopes.
+    Returns:
+        Dict with posterior draws and summaries per monitor: slope, doubling months,
+        and their credible intervals.
     """
     _require_numpyro()
 

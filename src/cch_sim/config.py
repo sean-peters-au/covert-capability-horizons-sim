@@ -1,3 +1,10 @@
+"""Configuration dataclasses for simulation, models, and monitors.
+
+Defines the structured configuration used throughout the simulation pipeline. These
+dataclasses are intended to be constructed from YAML/JSON (see CLI helpers) and
+validated before use.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -6,6 +13,20 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class MonitorConfig:
+    """Monitor configuration.
+
+    Attributes:
+        id: Monitor identifier.
+        label: Optional human‑readable label.
+        fpr_target: Base false‑positive rate target (applied per band if band‑specific
+            overrides are not provided).
+        fpr_short: Optional FPR override for short runtime band (< 120s).
+        fpr_med: Optional FPR override for medium runtime band (120–600s).
+        fpr_long: Optional FPR override for long runtime band (> 600s).
+        det_b1: Sensitivity of detection probability to effective covert load.
+        eta: Time‑dilation exponent affecting detection difficulty by runtime band.
+    """
+
     id: str = "M0"
     label: Optional[str] = None
     fpr_target: float = 1e-4  # ultra-low false-positive rate target
@@ -18,6 +39,12 @@ class MonitorConfig:
 
 @dataclass
 class SimConfig:
+    """Top‑level simulation configuration.
+
+    Fields are grouped by conceptual area (tasks, humans, models, monitors, etc.).
+    See ``validate()`` for schema and consistency checks.
+    """
+
     # Task/time bins (T)
     n_t_bins: int = 6
     tasks_per_bin: int = 2
@@ -79,26 +106,35 @@ class SimConfig:
     human_opt_lr: float = 0.05
 
     def validate(self) -> None:
+        """Validate internal consistency and required schema.
+
+        Raises:
+            AssertionError: If any required field is missing or inconsistent.
+        """
         assert self.n_t_bins >= 1
         assert self.tasks_per_bin >= 1
         assert 0 < self.t_seconds_min < self.t_seconds_max
         assert self.repeats_per_condition >= 1
-        # covert-overhead schema must be present and consistent
+
+        # Covert‑overhead schema must be present and consistent.
         assert self.c_over_bins is not None and len(self.c_over_bins) >= 1, (
             "c_over_bins must be provided"
         )
         assert (
             self.c_over_mix_by_t_bin is not None and len(self.c_over_mix_by_t_bin) == self.n_t_bins
         ), "c_over_mix_by_t_bin must have n_t_bins rows"
+
         M = len(self.c_over_bins)
         for i, rng in enumerate(self.c_over_bins):
             assert "lo_s" in rng and "hi_s" in rng, "c_over_bins entries must have lo_s and hi_s"
             assert 0.0 <= float(rng["lo_s"]) < float(rng["hi_s"]), (
                 "each covert-overhead range must satisfy 0 <= lo_s < hi_s"
             )
+
         for b, row in enumerate(self.c_over_mix_by_t_bin):
             assert len(row) == M, f"c_over_mix_by_t_bin[{b}] must have length {M}"
             assert sum([float(x) for x in row]) > 0.0, "mixture weights per T-bin must sum to > 0"
+
         for m in self.monitors:
             assert m.fpr_target >= 0.0
             if m.fpr_short is not None:

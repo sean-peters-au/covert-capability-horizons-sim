@@ -43,7 +43,10 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 default-groups = ["test", "lint", "typecheck"]
-package = false
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cch_sim"]
 
 [tool.ruff]
 line-length = 100
