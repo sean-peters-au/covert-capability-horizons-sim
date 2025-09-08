@@ -66,5 +66,4 @@ gates:
   delta50_max_ci_width_s: 60.0
   d50_min_fraction_in_range: 0.8
   delta50_true_doubling_months: 6.0
-  delta50_dm_max_ci_width: 3.0
   trend_max_doubling_months: 9.0

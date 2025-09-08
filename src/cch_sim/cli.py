@@ -7,11 +7,8 @@ from pathlib import Path
 from typing import Any, Dict
 import math
 import numpy as np
-
-try:
-    import yaml  # type: ignore
-except Exception:  # pragma: no cover - optional at runtime
-    yaml = None
+import pandas as pd
+import yaml
 
 from .config import SimConfig, MonitorConfig
 from .core.tasks import generate_tasks
@@ -28,8 +25,6 @@ def _load_yaml_or_json(path: str) -> Dict[str, Any]:
     p = Path(path)
     txt = p.read_text(encoding="utf-8")
     if p.suffix.lower() in {".yaml", ".yml"}:
-        if yaml is None:
-            raise RuntimeError("PyYAML not installed; cannot parse YAML.")
         return dict(yaml.safe_load(txt))
     return dict(json.loads(txt))
 
@@ -112,7 +107,6 @@ def cmd_simulate(args: argparse.Namespace) -> None:
     trend = sample_trend_posterior(mod_draws, rel_map, priors={"seed": cfg.seed, "num_warmup_trend": 200, "num_samples_trend": 200})
 
     # Write outputs
-    import pandas as pd
     def ci_from_draws(arr):
         v = np.array(arr, float)
         if v.size == 0:
@@ -124,10 +118,6 @@ def cmd_simulate(args: argparse.Namespace) -> None:
         mon_id, mid = key.split(":")
         lo, med, hi = ci_from_draws(draws)
         rows_delta.append(dict(monitor_id=mon_id, model_id=mid, release_month=rel_map.get(mid), delta50_s_lo=lo, delta50_s_med=med, delta50_s_hi=hi))
-    for key, draws in mod_draws.get("delta50_s_draws", {}).items():
-        mon_id, mid = key.split(":")
-        lo, med, hi = ci_from_draws(draws)
-        
     pd.DataFrame(rows_delta).to_csv(Path(args.out)/"delta50_by_monitor.csv", index=False)
     
     # Trend summary (per monitor)
@@ -173,8 +163,8 @@ def cmd_sweep(args: argparse.Namespace) -> None:
     scenarios = data.get("scenarios", [])
     gates = data.get("gates", {})
     trend_max_dm = float(gates.get("trend_max_doubling_months", float("nan")))
-    # Optional H50 precision gate (seconds)
-    delta50_max_ci_width_s = float(gates.get("delta50_max_ci_width_s", gates.get("h50_max_ci_width_s", float("nan"))))
+    # Optional Δ50 precision gate (seconds). Alias removed; use only 'delta50_max_ci_width_s'.
+    delta50_max_ci_width_s = float(gates.get("delta50_max_ci_width_s", float("nan")))
     # Optional Δ50 in-range fraction
     d50_min_fraction = float(gates.get("d50_min_fraction_in_range", 0.8))
     # Δ50 trend recovery parameters (true doubling months and optional CI width bound)
@@ -184,7 +174,6 @@ def cmd_sweep(args: argparse.Namespace) -> None:
     dm_rel_width_max = float(gates.get("delta50_dm_rel_width_max", float("nan")))
     replicates = int(getattr(args, "replicates", 1))
     os.makedirs(args.out, exist_ok=True)
-    import pandas as pd
     rows = []
     trend_rows = []
     # Collect per-design per-seed gate pass records
@@ -254,7 +243,7 @@ def cmd_sweep(args: argparse.Namespace) -> None:
 
                     if np.isfinite(true_dm):
                         gtrend = trend_recovery_rope_gate(d, true_dm, rel_factor=dm_rel_factor, min_prob_in_window=dm_min_prob, rel_width_max=(dm_rel_width_max if np.isfinite(dm_rel_width_max) else None))
-                        gate_pass["delta50_trend_recovery"] = bool(gtrend.get("pass_", False))
+                        gate_pass["delta50_trend_rope"] = bool(gtrend.get("pass_", False))
                 # --- Gate evaluation per seed for assurance (optional gates) ---
                 # Δ50 precision gate: pass if any model meets width threshold
                 if np.isfinite(delta50_max_ci_width_s):

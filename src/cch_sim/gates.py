@@ -49,24 +49,6 @@ def delta50_in_range_gate(
     return dict(pass_=passed, frac_in_range=frac, median=med, lo=lo, hi=hi)
 
 
-def trend_recovery_gate(trend_info: Dict[str, object], true_dm_months: float, max_ci_width_months: float | None = None) -> Dict[str, float | bool]:
-    """Gate on Δ50 trend recovery: require true doubling months to lie within the 95% CI.
-
-    Optionally require the CI width to be ≤ max_ci_width_months (if provided and finite).
-    Expects trend_info with keys: 'dm_ci' = [lo, hi].
-    """
-    dm_ci = trend_info.get("dm_ci") if isinstance(trend_info, dict) else None
-    if not isinstance(dm_ci, (list, tuple)) or len(dm_ci) != 2:
-        return dict(pass_=False, in_ci=False, width=float("nan"), true_dm=true_dm_months)
-    lo, hi = float(dm_ci[0]), float(dm_ci[1])
-    in_ci = (lo <= float(true_dm_months) <= hi)
-    width = hi - lo if np.isfinite(lo) and np.isfinite(hi) else float("nan")
-    width_ok = True
-    if max_ci_width_months is not None and np.isfinite(max_ci_width_months):
-        width_ok = (np.isfinite(width) and width <= float(max_ci_width_months))
-    passed = bool(in_ci and width_ok)
-    return dict(pass_=passed, in_ci=in_ci, width=width, lo=lo, hi=hi, true_dm=true_dm_months)
-
 
 def trend_recovery_rope_gate(
     trend_info: Dict[str, object],

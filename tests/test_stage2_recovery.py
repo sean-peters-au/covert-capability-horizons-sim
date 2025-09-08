@@ -54,7 +54,7 @@ def test_stage2_delta50_recovery_from_attempts():
     draws_m = sample_models_posterior(
         attempts,
         humans_draws,
-        priors=dict(seed=0, num_warmup=600, num_samples=800, num_chains=2, target_accept=0.95, max_tree_depth=14),
+        priors=dict(seed=0, num_warmup=600, num_samples=800, num_chains=1, target_accept=0.95, max_tree_depth=14),
     )
 
     key = "M0:m0"

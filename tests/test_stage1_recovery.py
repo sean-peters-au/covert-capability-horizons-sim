@@ -22,6 +22,12 @@ def test_stage1_task_baseline_and_delta_recovery_small():
         pytest.skip("NumPyro/ArviZ not installed in test env")
 
     from cch_sim.pipeline import sample_humans_posterior
+    # Ensure two logical devices so NumPyro doesn't warn about chains
+    try:
+        import numpyro
+        numpyro.set_host_device_count(2)
+    except Exception:
+        pass
 
     rng = np.random.default_rng(42)
     # Ground truth (log-seconds)
@@ -78,4 +84,3 @@ def test_stage1_task_baseline_and_delta_recovery_small():
 
     assert np.all(rel_err_t <= 0.25), f"tT medians off: {rel_err_t}"
     assert np.all(rel_err_D <= 0.30), f"Delta medians off: {rel_err_D}"
-

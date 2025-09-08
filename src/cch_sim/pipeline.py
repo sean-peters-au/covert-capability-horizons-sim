@@ -1,7 +1,7 @@
 """
 Bayesian simulation pipeline (single, simple path):
 
-log inside (humans, log-seconds) → absolute outside (Δ seconds, models) → trend on log(H50).
+log inside (humans, log-seconds) → absolute outside (Δ seconds, models) → trend on log(Δ50).
 
 This module defines three pure functions. They import NumPyro/JAX/ArviZ lazily
 so the rest of the codebase can import this file without requiring those
@@ -9,15 +9,8 @@ dependencies until you actually call the sampling functions.
 
 Functions
 - sample_humans_posterior(humans_df, priors) -> dict with draws for tT_s[j,k], Δ_s[j,k]
-- sample_models_posterior(attempts_df, draws_humans, priors) -> dict with draws for Δ50_s, t50_s, H50_s
+- sample_models_posterior(attempts_df, draws_humans, priors) -> dict with draws for Δ50_s
 - sample_trend_posterior(metric_draws, release_months, priors) -> dict with slope/doubling-months draws
-
-Notes
-- This is the only Bayesian path. No fallbacks, no alternative estimators.
-- Units are seconds for Stage 2 quantities (Δ, t50, H50). Stage 1 operates on
-  log-seconds for stability and censoring handling.
-- If NumPyro/JAX/ArviZ are not installed, these functions raise with a clear
-  message instructing to install dependencies.
 """
 
 from __future__ import annotations
@@ -61,7 +54,6 @@ def sample_humans_posterior(humans_df: pd.DataFrame, priors: Dict[str, Any] | No
     from numpyro.infer import MCMC, NUTS
     import arviz as az
     import jax.scipy as jsp
-    import arviz as az
 
     df = humans_df.copy()
     # Required columns: participant_id, task_id, condition ('T' or 'T+C'), log_t_obs, censored (0/1)
@@ -71,21 +63,17 @@ def sample_humans_posterior(humans_df: pd.DataFrame, priors: Dict[str, Any] | No
     tasks = sorted(df["task_id"].unique().tolist())
     parts = sorted(df["participant_id"].unique().tolist())
     tmap = {t: i for i, t in enumerate(tasks)}
-    pmap = {p: i for i, p in enumerate(parts)}
     tj = df["task_id"].map(tmap).to_numpy()
-    pi = df["participant_id"].map(pmap).to_numpy()
     zc = (df["condition"].astype(str) == "T+C").astype(int).to_numpy()
     y = df["log_t_obs"].astype(float).to_numpy()
     cens = df.get("censored", 0)
     cens = cens.astype(int).to_numpy()
 
-    n_obs = y.shape[0]
     n_tasks = len(tasks)
-    n_parts = len(parts)
 
     p = priors or {}
 
-    def model(y, tj, pi, zc, cens):
+    def model(y, tj, zc, cens):
         # Priors
         mu = numpyro.sample("mu", dist.Normal(0.0, p.get("mu_sd", 2.0)))
         sigma = numpyro.sample("sigma", dist.HalfNormal(p.get("sigma_sd", 0.5)))
@@ -119,7 +107,7 @@ def sample_humans_posterior(humans_df: pd.DataFrame, priors: Dict[str, Any] | No
 
     nuts = NUTS(model, target_accept_prob=p.get("target_accept", 0.9), max_tree_depth=p.get("max_tree_depth", 12))
     mcmc = MCMC(nuts, num_warmup=int(p.get("num_warmup", 800)), num_samples=int(p.get("num_samples", 800)), num_chains=int(p.get("num_chains", 4)))
-    mcmc.run(jax.random.PRNGKey(int(p.get("seed", 0))), y=y, tj=tj, pi=pi, zc=zc, cens=cens)
+    mcmc.run(jax.random.PRNGKey(int(p.get("seed", 0))), y=y, tj=tj, zc=zc, cens=cens)
     samples = mcmc.get_samples(group_by_chain=False)
     # Diagnostics
     idata = az.from_numpyro(mcmc)
@@ -127,9 +115,19 @@ def sample_humans_posterior(humans_df: pd.DataFrame, priors: Dict[str, Any] | No
     chk_vars = ["baseline_log_t_T_hat", "delta_log"]
     rhat = az.rhat(idata, var_names=chk_vars)
     ess = az.ess(idata, var_names=chk_vars, method="bulk")
-    max_rhat = float(np.nanmax(rhat.to_array()))
-    min_ess = float(np.nanmin(ess.to_array()))
-    if max_rhat > float(p.get("rhat_max", 1.05)) or min_ess < float(p.get("ess_min", 200)):
+    r_arr = rhat.to_array()
+    e_arr = ess.to_array()
+    if np.isfinite(r_arr).any():
+        max_rhat = float(np.nanmax(r_arr))
+    else:
+        max_rhat = float("nan")
+    if np.isfinite(e_arr).any():
+        min_ess = float(np.nanmin(e_arr))
+    else:
+        min_ess = float("nan")
+    bad_rhat = (np.isfinite(max_rhat) and (max_rhat > float(p.get("rhat_max", 1.05))))
+    bad_ess = (np.isfinite(min_ess) and (min_ess < float(p.get("ess_min", 200))))
+    if bad_rhat or bad_ess:
         raise RuntimeError(f"Stage1 convergence failure: rhat_max={max_rhat:.3f}, ess_min={min_ess:.1f}")
 
     # Derive seconds per task per draw
@@ -209,9 +207,19 @@ def sample_models_posterior(attempts_df: pd.DataFrame,
         idata = az.from_numpyro(mcmc)
         rhat = az.rhat(idata, var_names=["theta0", "beta1"])
         ess = az.ess(idata, var_names=["theta0", "beta1"], method="bulk")
-        max_rhat = float(np.nanmax(rhat.to_array()))
-        min_ess = float(np.nanmin(ess.to_array()))
-        if max_rhat > float((priors or {}).get("rhat_max", 1.05)) or min_ess < float((priors or {}).get("ess_min", 200)):
+        r_arr = rhat.to_array()
+        e_arr = ess.to_array()
+        if np.isfinite(r_arr).any():
+            max_rhat = float(np.nanmax(r_arr))
+        else:
+            max_rhat = float("nan")
+        if np.isfinite(e_arr).any():
+            min_ess = float(np.nanmin(e_arr))
+        else:
+            min_ess = float("nan")
+        bad_rhat = (np.isfinite(max_rhat) and (max_rhat > float((priors or {}).get("rhat_max", 1.05))))
+        bad_ess = (np.isfinite(min_ess) and (min_ess < float((priors or {}).get("ess_min", 200))))
+        if bad_rhat or bad_ess:
             raise RuntimeError(f"Stage2 convergence failure for {mon}:{mid} rhat_max={max_rhat:.3f}, ess_min={min_ess:.1f}")
         theta0 = np.array(s["theta0"])  # [S]
         beta1 = np.array(s["beta1"])    # [S]
@@ -248,7 +256,7 @@ def sample_trend_posterior(metric_draws: Dict[str, Any],
 
     Returns a dict with posterior draws for slope and doubling months, plus summaries.
 
-    H50 units are seconds; slopes are per year on log-seconds; doubling months is 12*ln(2)/slope for positive slopes.
+    Series units are seconds (Δ50 by default); slopes are per year on log-seconds; doubling months is 12*ln(2)/slope for positive slopes.
     """
     _require_numpyro()
 
@@ -284,12 +292,25 @@ def sample_trend_posterior(metric_draws: Dict[str, Any],
         slopes = np.array(slopes)
         # Positive slope ⇒ finite doubling months; non-positive ⇒ inf
         dm = np.where(slopes > 0, 12.0 * np.log(2.0) / (slopes + 1e-12), np.inf)
+        # Robust summaries for small M (e.g., one model ⇒ no slope draws)
+        if slopes.size > 0:
+            slope_median = float(np.nanmedian(slopes))
+            slope_ci = list(np.nanpercentile(slopes, [2.5, 97.5]))
+        else:
+            slope_median = float("nan")
+            slope_ci = [float("nan"), float("nan")]
+        if np.isfinite(dm).any():
+            dm_median = float(np.nanmedian(dm[np.isfinite(dm)]))
+            dm_ci = list(np.nanpercentile(dm[np.isfinite(dm)], [2.5, 97.5]))
+        else:
+            dm_median = float("inf")
+            dm_ci = [float("nan"), float("nan")]
         out["trend"][mon] = dict(
             slope_draws=slopes,
             doubling_months_draws=dm,
-            slope_median=float(np.nanmedian(slopes)),
-            slope_ci=list(np.nanpercentile(slopes, [2.5, 97.5])),
-            dm_median=float(np.nanmedian(dm[np.isfinite(dm)])) if np.isfinite(dm).any() else float("inf"),
-            dm_ci=list(np.nanpercentile(dm[np.isfinite(dm)], [2.5, 97.5])) if np.isfinite(dm).any() else [float("nan"), float("nan")],
+            slope_median=slope_median,
+            slope_ci=slope_ci,
+            dm_median=dm_median,
+            dm_ci=dm_ci,
         )
     return out

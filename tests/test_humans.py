@@ -43,7 +43,7 @@ def test_pipeline_humans_models_trend_small_smoke():
             seed=0,
             num_warmup=350,
             num_samples=350,
-            num_chains=2,
+            num_chains=1,
             target_accept=0.95,
             max_tree_depth=14,
             # tighten hierarchical scales to stabilize tiny-data inference
@@ -69,7 +69,7 @@ def test_pipeline_humans_models_trend_small_smoke():
     draws_m = sample_models_posterior(
         attempts,
         draws_h,
-        priors=dict(seed=0, num_warmup=400, num_samples=800, num_chains=2, target_accept=0.95, max_tree_depth=14),
+        priors=dict(seed=0, num_warmup=400, num_samples=800, num_chains=1, target_accept=0.95, max_tree_depth=14),
     )
     d50 = list(draws_m["delta50_s_draws"].values())[0]
     assert np.isfinite(np.median(d50))

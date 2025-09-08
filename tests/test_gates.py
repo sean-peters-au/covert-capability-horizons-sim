@@ -5,7 +5,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cch_sim.gates import delta50_precision_gate, delta50_in_range_gate, trend_recovery_gate, trend_recovery_rope_gate
+from cch_sim.gates import delta50_precision_gate, delta50_in_range_gate, trend_recovery_rope_gate
 
 
 def test_delta50_precision_gate_pass_when_width_small():
@@ -44,16 +44,6 @@ def test_delta50_in_range_gate_fail():
     assert g["pass_"] is False
     assert g["frac_in_range"] < 0.8
 
-
-def test_trend_recovery_gate_pass_and_fail():
-    # Passing case: true dm inside CI and width below threshold
-    trend_info = {"dm_ci": [5.0, 9.0]}
-    g = trend_recovery_gate(trend_info, true_dm_months=6.0, max_ci_width_months=6.0)
-    assert g["pass_"] is True and g["in_ci"] is True
-    # Failing case: true dm outside CI
-    trend_info2 = {"dm_ci": [10.0, 20.0]}
-    g2 = trend_recovery_gate(trend_info2, true_dm_months=6.0, max_ci_width_months=20.0)
-    assert g2["pass_"] is False and g2["in_ci"] is False
 
 
 def test_trend_recovery_rope_gate_prob_window():

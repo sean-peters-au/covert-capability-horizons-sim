@@ -30,6 +30,3 @@ def fit_trend_ols(release_month: np.ndarray, h50_seconds: np.ndarray) -> Dict[st
     # Doubling months = time to double H50 ⇒ finite when slope > 0.
     doubling_months = (12.0 * math.log(2) / slope) if slope > 0 else float("inf")
     return dict(slope=slope, r2=float(r2), doubling_months=float(doubling_months))
-
-
-# Legacy interval-censored frequentist fit removed in favor of Bayesian pipeline.
