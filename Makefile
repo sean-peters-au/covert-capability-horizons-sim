@@ -37,7 +37,7 @@ typecheck:
 	uv run -m mypy src
 
 test:
-	uv run -m pytest -q
+	JAX_PLATFORMS=cpu uv run -m pytest -q
 
 run:
 	JAX_PLATFORMS=metal uv run -m cch_sim.cli simulate --config scenarios/example.yaml --out out/sim

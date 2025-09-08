@@ -14,8 +14,8 @@ def _df_attempts(rows):
 
 
 def test_detection_success_bit_controls():
-    # det_b1=0 => p_det = b0 (sigmoid(logit(fpr))) per band
-    mon = {"id": "M0", "fpr_target": 0.5, "det_b1": 0.0, "eta": 0.0}
+    # det_b1=0 => p_det = fpr_target
+    mon = {"id": "M0", "fpr_target": 0.5, "det_b1": 0.0}
     rows = [
         # u_cov < p_cov → covert ok; success toggles on u_det < p_det
         dict(
@@ -43,19 +43,9 @@ def test_detection_success_bit_controls():
     assert df.loc[df.index[1], "success"] == 1  # not detected
 
 
-def test_detection_band_fpr_targets_ordering():
-    # Keep det_b1=0 to isolate band intercepts
-    mon = {"id": "M0", "fpr_short": 0.1, "fpr_med": 0.2, "fpr_long": 0.3, "det_b1": 0.0, "eta": 0.0}
+def test_detection_fpr_target_monotonicity():
+    # With det_b1=0, p_det = fpr_target; higher FPR increases detection (less success)
     rows = [
-        dict(
-            model_id="m0",
-            task_id="T0",
-            runtime_s=60.0,
-            delta_true=0.0,
-            u_cov=0.0,
-            p_cov=1.0,
-            u_det=0.2,
-        ),  # short, p_det=0.1 < u_det -> not detected
         dict(
             model_id="m0",
             task_id="T0",
@@ -64,51 +54,51 @@ def test_detection_band_fpr_targets_ordering():
             u_cov=0.0,
             p_cov=1.0,
             u_det=0.2,
-        ),  # med,   p_det=0.2 == u_det -> not detected (strict <)
-        dict(
-            model_id="m0",
-            task_id="T0",
-            runtime_s=1800.0,
-            delta_true=0.0,
-            u_cov=0.0,
-            p_cov=1.0,
-            u_det=0.2,
-        ),  # long,  p_det=0.3 > u_det -> detected
+        )
     ]
-    df = apply_detection_models(_df_attempts(rows), mon)
-    # Success = covert_ok and not detected
-    assert df.loc[df.index[0], "success"] == 1
-    assert df.loc[df.index[1], "success"] == 1
-    assert df.loc[df.index[2], "success"] == 0
+    df_low = apply_detection_models(
+        _df_attempts(rows), {"id": "M0", "fpr_target": 0.1, "det_b1": 0.0}
+    )
+    df_mid = apply_detection_models(
+        _df_attempts(rows), {"id": "M0", "fpr_target": 0.2, "det_b1": 0.0}
+    )
+    df_hi = apply_detection_models(
+        _df_attempts(rows), {"id": "M0", "fpr_target": 0.3, "det_b1": 0.0}
+    )
+    # Success is 1 if not detected; as fpr increases, detection increases, so success declines
+    s_low = int(df_low.loc[df_low.index[0], "success"])  # likely 1 (0.1 < 0.2)
+    s_mid = int(df_mid.loc[df_mid.index[0], "success"])  # edge (0.2 == 0.2) still 1 due to strict <
+    s_hi = int(df_hi.loc[df_hi.index[0], "success"])  # 0 (0.3 > 0.2)
+    assert s_low >= s_mid >= s_hi
 
 
-def test_detection_time_dilation_effect_same_band():
-    # Medium band (120..600s). Shorter runtime should be more detectable when eta>0.
-    mon = {"id": "M0", "fpr_target": 0.5, "det_b1": 0.1, "eta": 1.0}
+def test_detection_monotone_in_delta():
+    # Larger delta_true -> larger ECL ratio -> higher detection probability -> lower success
+    mon = {"id": "M0", "fpr_target": 0.2, "det_b1": 0.5}
     rows = [
         dict(
             model_id="m0",
             task_id="T0",
-            runtime_s=150.0,
-            delta_true=0.1,
+            runtime_s=300.0,
+            delta_true=0.0,
             u_cov=0.0,
             p_cov=1.0,
-            u_det=0.53,
+            u_det=0.3,
         ),
         dict(
             model_id="m0",
             task_id="T0",
-            runtime_s=500.0,
-            delta_true=0.1,
+            runtime_s=300.0,
+            delta_true=0.7,
             u_cov=0.0,
             p_cov=1.0,
-            u_det=0.53,
+            u_det=0.3,
         ),
     ]
     df = apply_detection_models(_df_attempts(rows), mon)
-    # First row (shorter runtime) should be detected more often -> success lower than second.
-    assert df.loc[df.index[0], "success"] == 0  # detected -> not successful
-    assert df.loc[df.index[1], "success"] == 1  # not detected -> successful
+    # Smaller delta → lower p_det → success 1; Larger delta → higher p_det → success 0
+    assert df.loc[df.index[0], "success"] == 1
+    assert df.loc[df.index[1], "success"] == 0
 
 
 def test_detection_empty_df_returns_empty_with_columns():

@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 from .config import MonitorConfig, SimConfig
 from .core.detection import apply_detection_models
