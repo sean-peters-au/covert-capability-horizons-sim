@@ -16,6 +16,7 @@ dependencies = [
   "numpyro>=0.13,<0.15",
   "jax>=0.4.23,<0.5",
   "jaxlib>=0.4.23,<0.5",
+  "jax-metal>=0.1.1",
 ]
 
 [project.optional-dependencies]

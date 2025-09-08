@@ -11,11 +11,7 @@ from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
-
-try:
-    import yaml  # type: ignore[import-untyped]
-except Exception:  # pragma: no cover - optional runtime dependency
-    yaml = None
+import yaml  # type: ignore[import-untyped]
 
 from .config import MonitorConfig, SimConfig
 from .core.detection import apply_detection_models
@@ -40,8 +36,6 @@ def _load_yaml_or_json(path: str) -> Dict[str, Any]:
     p = Path(path)
     txt = p.read_text(encoding="utf-8")
     if p.suffix.lower() in {".yaml", ".yml"}:
-        if yaml is None:
-            raise RuntimeError("PyYAML is not installed; cannot read YAML config.")
         return dict(yaml.safe_load(txt))
     return dict(json.loads(txt))
 

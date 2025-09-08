@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
+from tqdm import tqdm
 
 from .assurance import assurance_all_gates
 from .config import SimConfig
@@ -363,10 +364,14 @@ def run(
     # Evaluate each candidate; autoparallel over seeds within candidate, fallback to serial if needed
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
-    for i, cand in enumerate(candidates):
+    # High-level progress over candidates; inner MCMC progress is disabled.
+    _iter = tqdm(candidates, desc="Candidates", total=len(candidates))
+
+    for i, cand in enumerate(_iter):
         seed_list = [_mix_seed(base_seed, i, j) for j in range(n_seeds)]
         # Submit tasks
         results: List[Tuple[Dict[str, bool], float, int]] = []
+        pbar = tqdm(total=n_seeds, desc="Seeds", leave=False)
         try:
             with ProcessPoolExecutor(max_workers=os.cpu_count() or 1) as ex:
                 futs = [
@@ -374,9 +379,14 @@ def run(
                 ]
                 for f in as_completed(futs):
                     results.append(f.result())
+                    pbar.update(1)
         except Exception:
             # Fallback to serial
-            results = [_eval_candidate_seed(scenario_cfg, cand, gates, s) for s in seed_list]
+            for s in seed_list:
+                results.append(_eval_candidate_seed(scenario_cfg, cand, gates, s))
+                pbar.update(1)
+        finally:
+            pbar.close()
 
         # Aggregate assurance
         pass_records = [r[0] for r in results]

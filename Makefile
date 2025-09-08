@@ -40,10 +40,10 @@ test:
 	uv run -m pytest -q
 
 run:
-	uv run -m cch_sim.cli simulate --config scenarios/example.yaml --out out/sim
+	JAX_PLATFORMS=metal uv run -m cch_sim.cli simulate --config scenarios/example.yaml --out out/sim
 
 sweep:
-	uv run -m cch_sim.cli sweep --scenarios scenarios/example.yaml --out out/sweep
+	JAX_PLATFORMS=metal uv run -m cch_sim.cli sweep --scenarios scenarios/example.yaml --out out/sweep
 
 # Pilot design search (scenario + grid from scenarios/)
 PILOT_SCENARIO ?= scenarios/pilot_signal.yaml
@@ -51,7 +51,7 @@ PILOT_SEARCH   ?= scenarios/study_search_pilot.yaml
 PILOT_OUT      ?= out/design_search_pilot_signal
 
 pilot-design:
-	uv run -m cch_sim.cli design-search --scenario $(PILOT_SCENARIO) --search $(PILOT_SEARCH) --out $(PILOT_OUT)
+	JAX_PLATFORMS=metal uv run -m cch_sim.cli design-search --scenario $(PILOT_SCENARIO) --search $(PILOT_SEARCH) --out $(PILOT_OUT)
 	uv run python scripts/make_plots.py --run-dir $(PILOT_OUT)
 
 clean:

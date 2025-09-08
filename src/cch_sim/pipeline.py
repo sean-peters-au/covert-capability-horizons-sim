@@ -124,11 +124,14 @@ def sample_humans_posterior(
         target_accept_prob=p.get("target_accept", 0.9),
         max_tree_depth=p.get("max_tree_depth", 12),
     )
+    chain_method = "parallel" if jax.default_backend() != "cpu" else "sequential"
     mcmc = MCMC(
         nuts,
         num_warmup=int(p.get("num_warmup", 800)),
         num_samples=int(p.get("num_samples", 800)),
         num_chains=int(p.get("num_chains", 4)),
+        chain_method=chain_method,
+        progress_bar=False,
     )
     mcmc.run(jax.random.PRNGKey(int(p.get("seed", 0))), y=y, tj=tj, zc=zc, cens=cens, pi=pi)
     samples = mcmc.get_samples(group_by_chain=False)
@@ -204,12 +207,20 @@ def sample_models_posterior(
         RuntimeError: If NumPyro/ArviZ are not installed.
     """
     _require_numpyro()
+    import warnings
+
     import arviz as az
     import jax
     import jax.numpy as jnp
     import numpyro
     import numpyro.distributions as dist
     from numpyro.infer import MCMC, NUTS
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r"There are not enough devices to run parallel chains",
+        category=UserWarning,
+    )
 
     _draws = humans_draws.get("draws")
     _tT_s = np.array(humans_draws["tT_s"])  # [n_tasks, S]
@@ -252,11 +263,14 @@ def sample_models_posterior(
             numpyro.sample("y", dist.Bernoulli(logits=logits), obs=y)
 
         nuts = NUTS(logit_model, target_accept_prob=(priors or {}).get("target_accept", 0.9))
+        chain_method = "parallel" if jax.default_backend() != "cpu" else "sequential"
         mcmc = MCMC(
             nuts,
             num_warmup=int((priors or {}).get("num_warmup", 600)),
             num_samples=int((priors or {}).get("num_samples", 600)),
             num_chains=int((priors or {}).get("num_chains", 4)),
+            chain_method=chain_method,
+            progress_bar=False,
         )
         mcmc.run(jax.random.PRNGKey(int((priors or {}).get("seed", 0))), x=x, y=y)
         s = mcmc.get_samples(group_by_chain=False)
