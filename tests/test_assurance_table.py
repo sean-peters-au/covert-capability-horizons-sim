@@ -38,12 +38,25 @@ def test_aggregate_assurance_table_two_designs():
 
 def test_write_assurance_table_roundtrip(tmp_path: Path):
     rows = [
-        {"design_id": "A", "assurance": 0.8, "gate_h50_rate": 0.8, "gate_coverage_rate": 1.0, "seeds": 5},
-        {"design_id": "B", "assurance": 0.2, "gate_h50_rate": 0.6, "gate_coverage_rate": 0.4, "seeds": 5},
+        {
+            "design_id": "A",
+            "assurance": 0.8,
+            "gate_h50_rate": 0.8,
+            "gate_coverage_rate": 1.0,
+            "seeds": 5,
+        },
+        {
+            "design_id": "B",
+            "assurance": 0.2,
+            "gate_h50_rate": 0.6,
+            "gate_coverage_rate": 0.4,
+            "seeds": 5,
+        },
     ]
     out = write_assurance_table(rows, tmp_path, basename="assure")
     # Files exist
-    p_csv = Path(out["csv"]); p_json = Path(out["json"])
+    p_csv = Path(out["csv"])
+    p_json = Path(out["json"])
     assert p_csv.exists() and p_json.exists()
     # CSV content matches number of rows and keys
     df = pd.read_csv(p_csv)
@@ -51,4 +64,3 @@ def test_write_assurance_table_roundtrip(tmp_path: Path):
     # JSON content is list of rows
     js = json.loads(p_json.read_text())
     assert isinstance(js, list) and len(js) == 2
-

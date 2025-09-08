@@ -8,9 +8,10 @@ This module will:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List, Tuple, Dict
 import math
+from dataclasses import dataclass
+from typing import Dict, List, Tuple
+
 import numpy as np
 import pandas as pd
 
@@ -24,7 +25,9 @@ class TaskRow:
     c_overhead_s: float
 
 
-def make_bins(t_seconds_min: float, t_seconds_max: float, n_t_bins: int) -> Tuple[np.ndarray, np.ndarray]:
+def make_bins(
+    t_seconds_min: float, t_seconds_max: float, n_t_bins: int
+) -> Tuple[np.ndarray, np.ndarray]:
     a, b = math.log(t_seconds_min), math.log(t_seconds_max)
     edges = np.linspace(a, b, n_t_bins + 1)
     centers = 0.5 * (edges[:-1] + edges[1:])
@@ -47,7 +50,8 @@ def generate_tasks(
     edges_log, centers_log = make_bins(t_seconds_min, t_seconds_max, n_t_bins)
 
     # Prepare covert-overhead ranges and per-T-bin mixtures
-    ranges = [(float(r['lo_s']), float(r['hi_s'])) for r in c_over_bins]
+    ranges = [(float(r["lo_s"]), float(r["hi_s"])) for r in c_over_bins]
+
     def _norm(v: List[float]):
         arr = np.asarray(v, float)
         s = float(np.sum(arr))
@@ -68,7 +72,15 @@ def generate_tasks(
             # Difficulty is human log-time overhead: delta = log(T+C) - log(T) = log(1 + C/T)
             t_T = float(np.exp(log_t_baseline_true))
             delta_true = float(np.log(1.0 + (c_s / max(t_T, 1e-12))))
-            rows.append(TaskRow(task_id=f"T{tid:03d}", bin=b, log_t_baseline_true=log_t_baseline_true, delta_true=delta_true, c_overhead_s=c_s))
+            rows.append(
+                TaskRow(
+                    task_id=f"T{tid:03d}",
+                    bin=b,
+                    log_t_baseline_true=log_t_baseline_true,
+                    delta_true=delta_true,
+                    c_overhead_s=c_s,
+                )
+            )
             tid += 1
 
     df = pd.DataFrame([r.__dict__ for r in rows])

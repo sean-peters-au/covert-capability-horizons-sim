@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple
+
 import numpy as np
 
 
@@ -14,7 +15,9 @@ def ci_from_draws(draws: np.ndarray, alpha: float = 0.05) -> Tuple[float, float,
     return float(lo_v), float(med_v), float(hi_v)
 
 
-def delta50_precision_gate(delta50_draws_seconds: np.ndarray, max_width_seconds: float, alpha: float = 0.05) -> Dict[str, float | bool]:
+def delta50_precision_gate(
+    delta50_draws_seconds: np.ndarray, max_width_seconds: float, alpha: float = 0.05
+) -> Dict[str, float | bool]:
     """Gate on Δ50 precision: 95% CI width must be ≤ max_width_seconds.
 
     Returns dict with pass flag and measured CI stats.
@@ -49,9 +52,8 @@ def delta50_in_range_gate(
     return dict(pass_=passed, frac_in_range=frac, median=med, lo=lo, hi=hi)
 
 
-
 def trend_recovery_rope_gate(
-    trend_info: Dict[str, object],
+    trend_info: dict[str, object],
     true_dm_months: float,
     rel_factor: float = 1.33,
     min_prob_in_window: float = 0.6,
@@ -64,14 +66,12 @@ def trend_recovery_rope_gate(
     - Gate passes if p_in ≥ min_prob_in_window and (optional) relative width (dm_hi - dm_lo)/dm_med ≤ rel_width_max.
     Returns dict with pass flag and diagnostics.
     """
-    if not isinstance(trend_info, dict):
-        return dict(pass_=False, p_in=float('nan'), rel_width=float('nan'))
     draws = trend_info.get("doubling_months_draws")
     dm_ci = trend_info.get("dm_ci")
-    dm_med = trend_info.get("dm_median")
+    dm_med_raw = trend_info.get("dm_median")
     v = np.asarray(draws, dtype=float) if draws is not None else np.array([])
     if v.size == 0 or not np.isfinite(v).any() or not np.isfinite(true_dm_months):
-        return dict(pass_=False, p_in=float('nan'), rel_width=float('nan'))
+        return dict(pass_=False, p_in=float("nan"), rel_width=float("nan"))
     # Window on linear scale
     gamma = float(rel_factor)
     lo = float(true_dm_months) / gamma
@@ -79,11 +79,28 @@ def trend_recovery_rope_gate(
     p_in = float(np.mean((v >= lo) & (v <= hi)))
     # Relative width check from CI if available
     rel_width_ok = True
-    rel_width = float('nan')
-    if isinstance(dm_ci, (list, tuple)) and len(dm_ci) == 2 and np.isfinite(dm_ci[0]) and np.isfinite(dm_ci[1]) and dm_med is not None and np.isfinite(dm_med):
+    rel_width = float("nan")
+    if (
+        isinstance(dm_ci, (list, tuple))
+        and len(dm_ci) == 2
+        and np.isfinite(dm_ci[0])
+        and np.isfinite(dm_ci[1])
+        and dm_med_raw is not None
+        and isinstance(dm_med_raw, (int, float))
+        and np.isfinite(float(dm_med_raw))
+    ):
         width = float(dm_ci[1]) - float(dm_ci[0])
-        rel_width = width / float(dm_med) if float(dm_med) > 0 else float('inf')
+        dm_med = float(dm_med_raw)
+        rel_width = width / dm_med if dm_med > 0 else float("inf")
         if rel_width_max is not None and np.isfinite(rel_width_max):
             rel_width_ok = bool(np.isfinite(rel_width) and (rel_width <= float(rel_width_max)))
     passed = bool((p_in >= float(min_prob_in_window)) and rel_width_ok)
-    return dict(pass_=passed, p_in=p_in, lo=lo, hi=hi, rel_factor=gamma, rel_width=rel_width, true_dm=true_dm_months)
+    return dict(
+        pass_=passed,
+        p_in=p_in,
+        lo=lo,
+        hi=hi,
+        rel_factor=gamma,
+        rel_width=rel_width,
+        true_dm=true_dm_months,
+    )

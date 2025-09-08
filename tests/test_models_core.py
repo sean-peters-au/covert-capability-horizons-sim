@@ -15,8 +15,8 @@ def test_generate_models_custom_abilities():
         "models": [
             {"model_id": "a", "release_month": 202401, "ability_seconds": 20},
             {"model_id": "b", "release_month": 202402, "ability_minutes": 2},  # 120s
-            {"model_id": "c", "release_month": 202403, "ability": 5},         # minutes -> 300s
-            {"model_id": "d", "release_month": 202404, "ability": 600},       # seconds (raw > 10)
+            {"model_id": "c", "release_month": 202403, "ability": 5},  # minutes -> 300s
+            {"model_id": "d", "release_month": 202404, "ability": 600},  # seconds (raw > 10)
         ],
     }
     out = generate_models(cfg, rng)
@@ -43,5 +43,4 @@ def test_generate_models_trend_zero_noise_monotone():
     rms = [r["release_month"] for r in out]
     d50s = [r["ability_seconds"] for r in out]
     assert min(rms) >= 202401 and max(rms) <= 202512
-    assert all(d50s[i] <= d50s[i+1] for i in range(len(d50s)-1))
-
+    assert all(d50s[i] <= d50s[i + 1] for i in range(len(d50s) - 1))

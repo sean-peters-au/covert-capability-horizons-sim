@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict
 import math
+from typing import Dict
+
 import numpy as np
 import pandas as pd
 
-from .utils import logit, sigmoid, band_for_seconds
+from .utils import band_for_seconds, logit, sigmoid
 
 
 def _b0_targets_by_band(monitor: Dict) -> Dict[str, float]:
@@ -14,9 +15,9 @@ def _b0_targets_by_band(monitor: Dict) -> Dict[str, float]:
     med = monitor.get("fpr_med", None)
     long = monitor.get("fpr_long", None)
     return {
-        "short": logit(float(short) if short is not None else base),
-        "med": logit(float(med) if med is not None else base),
-        "long": logit(float(long) if long is not None else base),
+        "short": float(logit(float(short) if short is not None else base)),
+        "med": float(logit(float(med) if med is not None else base)),
+        "long": float(logit(float(long) if long is not None else base)),
     }
 
 
@@ -53,11 +54,10 @@ def apply_detection_models(
     u_det = df["u_det"].astype(float).to_numpy()
     u_cov = df["u_cov"].astype(float).to_numpy()
     p_cov = df["p_cov"].astype(float).to_numpy()
-    covert_ok = (u_cov < p_cov)
-    detected = (u_det < p_det)
+    covert_ok = u_cov < p_cov
+    detected = u_det < p_det
     success = (covert_ok & (~detected)).astype(int)
     out = df.copy()
     out["success"] = success
     out["monitor_id"] = monitor.get("id", "M0")
     return out
-

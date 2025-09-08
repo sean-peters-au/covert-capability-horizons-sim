@@ -29,4 +29,3 @@ def test_trend_empty_series_no_crash(monkeypatch):
     draws = {"delta50_s_draws": {}}
     out = pl.sample_trend_posterior(draws, {}, priors={})
     assert isinstance(out, dict) and "trend" in out and out["trend"] == {}
-

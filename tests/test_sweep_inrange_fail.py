@@ -13,25 +13,48 @@ def test_sweep_in_range_gate_fail(tmp_path, monkeypatch):
 
     # Light generators
     monkeypatch.setattr(cli_mod, "generate_tasks", lambda **kw: pd.DataFrame({"task_id": ["T0"]}))
-    monkeypatch.setattr(cli_mod, "simulate_humans", lambda **kw: pd.DataFrame({"participant_id": ["P0"], "task_id": ["T0"], "condition": ["T"], "log_t_obs": [1.0], "censored": [0]}))
+    monkeypatch.setattr(
+        cli_mod,
+        "simulate_humans",
+        lambda **kw: pd.DataFrame(
+            {
+                "participant_id": ["P0"],
+                "task_id": ["T0"],
+                "condition": ["T"],
+                "log_t_obs": [1.0],
+                "censored": [0],
+            }
+        ),
+    )
 
     # Stage 1 posterior
     S = 16
+
     def fake_sample_humans_posterior(humans, priors=None):
-        return {"tasks": ["T0"], "draws": S, "tT_s": np.full((1, S), 900.0), "Delta_s": np.full((1, S), 100.0)}
+        return {
+            "tasks": ["T0"],
+            "draws": S,
+            "tT_s": np.full((1, S), 900.0),
+            "Delta_s": np.full((1, S), 100.0),
+        }
+
     monkeypatch.setattr(cli_mod, "sample_humans_posterior", fake_sample_humans_posterior)
 
     # One model
-    monkeypatch.setattr(cli_mod, "generate_models", lambda cfg, rng: [dict(model_id="m0", release_month=202401)])
+    monkeypatch.setattr(
+        cli_mod, "generate_models", lambda cfg, rng: [dict(model_id="m0", release_month=202401)]
+    )
 
     # Attempts Δ in narrow range [100, 200]
-    attempts = pd.DataFrame({
-        "model_id": ["m0", "m0", "m0", "m0"],
-        "task_id": ["T0", "T0", "T0", "T0"],
-        "runtime_s": [10.0, 10.0, 10.0, 10.0],
-        "d_seconds": [100.0, 120.0, 180.0, 200.0],
-        "success": [1, 1, 0, 0],
-    })
+    attempts = pd.DataFrame(
+        {
+            "model_id": ["m0", "m0", "m0", "m0"],
+            "task_id": ["T0", "T0", "T0", "T0"],
+            "runtime_s": [10.0, 10.0, 10.0, 10.0],
+            "d_seconds": [100.0, 120.0, 180.0, 200.0],
+            "success": [1, 1, 0, 0],
+        }
+    )
     monkeypatch.setattr(cli_mod, "simulate_model_attempts", lambda **kw: attempts)
     monkeypatch.setattr(cli_mod, "apply_detection_models", lambda df, mon: df)
 
@@ -40,6 +63,7 @@ def test_sweep_in_range_gate_fail(tmp_path, monkeypatch):
         key = "M0:m0"
         d50 = np.full(64, 350.0)  # outside [100,200]
         return {"delta50_s_draws": {key: d50}}
+
     monkeypatch.setattr(cli_mod, "sample_models_posterior", fake_sample_models_posterior)
     monkeypatch.setattr(cli_mod, "sample_trend_posterior", lambda *a, **k: {"trend": {}})
 
@@ -56,7 +80,9 @@ def test_sweep_in_range_gate_fail(tmp_path, monkeypatch):
                     "c_over_bins": [{"lo_s": 5, "hi_s": 10}],
                     "c_over_mix_by_t_bin": [[1.0]],
                     "models_mode": "custom",
-                    "models": [{"model_id": "m0", "release_month": 202401, "ability_seconds": 100.0}],
+                    "models": [
+                        {"model_id": "m0", "release_month": 202401, "ability_seconds": 100.0}
+                    ],
                     "monitors": [{"id": "M0"}],
                     "attempts_per_pair": 1,
                 },
@@ -78,4 +104,3 @@ def test_sweep_in_range_gate_fail(tmp_path, monkeypatch):
     row = df.iloc[0]
     # In-range gate should fail in both seeds
     assert abs(float(row["gate_delta50_in_range_rate"])) < 1e-12
-

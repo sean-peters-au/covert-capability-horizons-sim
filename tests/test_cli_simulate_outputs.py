@@ -27,49 +27,70 @@ def test_cmd_simulate_writes_expected_outputs(tmp_path, monkeypatch):
     }
 
     # Fakes for heavy steps
-    monkeypatch.setattr(cli_mod, "generate_tasks", lambda **kw: pd.DataFrame({
-        "task_id": ["T0"],
-        "bin": [0],
-        "log_t_baseline_true": [np.log(10.0)],
-        "delta_true": [np.log(1.2)],
-        "c_overhead_s": [2.0],
-    }))
+    monkeypatch.setattr(
+        cli_mod,
+        "generate_tasks",
+        lambda **kw: pd.DataFrame(
+            {
+                "task_id": ["T0"],
+                "bin": [0],
+                "log_t_baseline_true": [np.log(10.0)],
+                "delta_true": [np.log(1.2)],
+                "c_overhead_s": [2.0],
+            }
+        ),
+    )
     # Humans: both conditions present so anchors_snr has data
-    humans_df = pd.DataFrame({
-        "participant_id": ["P0", "P1"],
-        "task_id": ["T0", "T0"],
-        "condition": ["T", "T+C"],
-        "log_t_obs": [np.log(10.0), np.log(12.0)],
-        "censored": [0, 0],
-    })
+    humans_df = pd.DataFrame(
+        {
+            "participant_id": ["P0", "P1"],
+            "task_id": ["T0", "T0"],
+            "condition": ["T", "T+C"],
+            "log_t_obs": [np.log(10.0), np.log(12.0)],
+            "censored": [0, 0],
+        }
+    )
     monkeypatch.setattr(cli_mod, "simulate_humans", lambda **kw: humans_df)
 
     # Stage 1 posterior
     S = 16
-    humans_draws = {"tasks": ["T0"], "draws": S, "tT_s": np.full((1, S), 600.0), "Delta_s": np.full((1, S), 100.0)}
+    humans_draws = {
+        "tasks": ["T0"],
+        "draws": S,
+        "tT_s": np.full((1, S), 600.0),
+        "Delta_s": np.full((1, S), 100.0),
+    }
     monkeypatch.setattr(cli_mod, "sample_humans_posterior", lambda *a, **k: humans_draws)
 
     # Models
-    monkeypatch.setattr(cli_mod, "generate_models", lambda cfg, rng: [dict(model_id="m0", release_month=202401)])
+    monkeypatch.setattr(
+        cli_mod, "generate_models", lambda cfg, rng: [dict(model_id="m0", release_month=202401)]
+    )
 
     # Attempts through detection: ensure required cols present
-    attempts = pd.DataFrame({
-        "model_id": ["m0", "m0"],
-        "task_id": ["T0", "T0"],
-        "runtime_s": [10.0, 10.0],
-        "d_seconds": [400.0, 800.0],
-        "delta_true": [np.log(1.2), np.log(1.2)],
-        "u_cov": [0.0, 0.0],
-        "u_det": [1.0, 1.0],
-        "p_cov": [1.0, 1.0],
-        "success": [1, 0],
-    })
+    attempts = pd.DataFrame(
+        {
+            "model_id": ["m0", "m0"],
+            "task_id": ["T0", "T0"],
+            "runtime_s": [10.0, 10.0],
+            "d_seconds": [400.0, 800.0],
+            "delta_true": [np.log(1.2), np.log(1.2)],
+            "u_cov": [0.0, 0.0],
+            "u_det": [1.0, 1.0],
+            "p_cov": [1.0, 1.0],
+            "success": [1, 0],
+        }
+    )
     monkeypatch.setattr(cli_mod, "simulate_model_attempts", lambda **kw: attempts)
-    monkeypatch.setattr(cli_mod, "apply_detection_models", lambda df, mon: df.assign(monitor_id=mon.get("id", "M0")))
+    monkeypatch.setattr(
+        cli_mod, "apply_detection_models", lambda df, mon: df.assign(monitor_id=mon.get("id", "M0"))
+    )
 
     # Stage 2 posterior for Δ50
     d50 = np.full(32, 600.0)
-    monkeypatch.setattr(cli_mod, "sample_models_posterior", lambda *a, **k: {"delta50_s_draws": {"M0:m0": d50}})
+    monkeypatch.setattr(
+        cli_mod, "sample_models_posterior", lambda *a, **k: {"delta50_s_draws": {"M0:m0": d50}}
+    )
 
     # Trend posterior
     trend = {
@@ -105,7 +126,8 @@ def test_cmd_simulate_writes_expected_outputs(tmp_path, monkeypatch):
 
     # Basic schema checks
     df_d = pd.read_csv(outdir / "delta50_by_monitor.csv")
-    assert set(["monitor_id", "model_id", "release_month", "delta50_s_lo", "delta50_s_med", "delta50_s_hi"]).issubset(df_d.columns)
+    assert set(
+        ["monitor_id", "model_id", "release_month", "delta50_s_lo", "delta50_s_med", "delta50_s_hi"]
+    ).issubset(df_d.columns)
     df_t = pd.read_csv(outdir / "delta50_trend_by_monitor.csv")
     assert set(["monitor_id", "slope_median", "doubling_months_median"]).issubset(df_t.columns)
-

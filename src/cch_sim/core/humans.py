@@ -24,25 +24,57 @@ def simulate_humans(
     rows = []
     for _, trow in tasks.iterrows():
         # choose participants for each condition (without ensuring overlap for simplicity)
-        choices = rng.choice(participants, size=min(2 * repeats_per_condition, n_participants), replace=False)
+        choices = rng.choice(
+            participants, size=min(2 * repeats_per_condition, n_participants), replace=False
+        )
         T_part = choices[:repeats_per_condition]
-        TC_part = choices[repeats_per_condition: repeats_per_condition * 2]
+        TC_part = choices[repeats_per_condition : repeats_per_condition * 2]
 
         for pid in T_part:
             idx = int(pid[1:])
             log_t = float(trow.log_t_baseline_true + u_part[idx] + rng.normal(0.0, sigma_noise))
             t_s = float(np.exp(log_t))
-            rows.append(dict(participant_id=pid, task_id=trow.task_id, condition="T", t_seconds=t_s, log_t_obs=log_t,
-                             censored=0, censor_reason="", attempt_success=np.nan))
+            rows.append(
+                dict(
+                    participant_id=pid,
+                    task_id=trow.task_id,
+                    condition="T",
+                    t_seconds=t_s,
+                    log_t_obs=log_t,
+                    censored=0,
+                    censor_reason="",
+                    attempt_success=np.nan,
+                )
+            )
 
         for pid in TC_part:
             idx = int(pid[1:])
-            log_t = float(trow.log_t_baseline_true + trow.delta_true + u_part[idx] + rng.normal(0.0, sigma_noise))
+            log_t = float(
+                trow.log_t_baseline_true
+                + trow.delta_true
+                + u_part[idx]
+                + rng.normal(0.0, sigma_noise)
+            )
             t_s = float(np.exp(log_t))
-            p_covert = 1.0 / (1.0 + np.exp(-(human_cov_alpha + human_cov_beta * float(trow.delta_true) + u_skill[idx])))
+            p_covert = 1.0 / (
+                1.0
+                + np.exp(
+                    -(human_cov_alpha + human_cov_beta * float(trow.delta_true) + u_skill[idx])
+                )
+            )
             att_succ = int(rng.random() < p_covert)
             cens = int(not att_succ)
-            rows.append(dict(participant_id=pid, task_id=trow.task_id, condition="T+C", t_seconds=t_s, log_t_obs=log_t,
-                             censored=cens, censor_reason=("timeout" if cens==1 else ""), attempt_success=att_succ))
+            rows.append(
+                dict(
+                    participant_id=pid,
+                    task_id=trow.task_id,
+                    condition="T+C",
+                    t_seconds=t_s,
+                    log_t_obs=log_t,
+                    censored=cens,
+                    censor_reason=("timeout" if cens == 1 else ""),
+                    attempt_success=att_succ,
+                )
+            )
 
     return pd.DataFrame(rows)

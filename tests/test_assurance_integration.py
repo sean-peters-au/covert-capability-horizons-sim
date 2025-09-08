@@ -37,4 +37,3 @@ def test_aggregate_assurance_for_design_two_examples():
     assert abs(row_B["gate_h50_rate"] - 0.6) < 1e-9
     assert abs(row_B["gate_coverage_rate"] - 0.4) < 1e-9
     assert row_B["seeds"] == 5
-

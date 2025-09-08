@@ -11,6 +11,7 @@ def numpyro_available():
     try:
         import numpyro  # noqa: F401
         import arviz  # noqa: F401
+
         return True
     except Exception:
         return False
@@ -19,12 +20,15 @@ def numpyro_available():
 def test_stage1_task_baseline_and_delta_recovery_small():
     if not numpyro_available():
         import pytest
+
         pytest.skip("NumPyro/ArviZ not installed in test env")
 
     from cch_sim.pipeline import sample_humans_posterior
+
     # Ensure two logical devices so NumPyro doesn't warn about chains
     try:
         import numpyro
+
         numpyro.set_host_device_count(2)
     except Exception:
         pass
@@ -41,10 +45,22 @@ def test_stage1_task_baseline_and_delta_recovery_small():
         for pid in participants:
             # T
             yT = base_log[tid] + rng.normal(0.0, 0.10)
-            rows.append(dict(participant_id=pid, task_id=tid, condition="T", log_t_obs=float(yT), censored=0))
+            rows.append(
+                dict(
+                    participant_id=pid, task_id=tid, condition="T", log_t_obs=float(yT), censored=0
+                )
+            )
             # T+C
             yTC = base_log[tid] + delta_log[tid] + rng.normal(0.0, 0.10)
-            rows.append(dict(participant_id=pid, task_id=tid, condition="T+C", log_t_obs=float(yTC), censored=0))
+            rows.append(
+                dict(
+                    participant_id=pid,
+                    task_id=tid,
+                    condition="T+C",
+                    log_t_obs=float(yTC),
+                    censored=0,
+                )
+            )
 
     humans = pd.DataFrame(rows)
 

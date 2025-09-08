@@ -1,27 +1,27 @@
 from __future__ import annotations
 
+import copy
 import json
 import math
 import os
-import copy
 from itertools import product
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
+from .assurance import assurance_all_gates
 from .config import SimConfig
-from .core.tasks import generate_tasks
+from .core.detection import apply_detection_models
 from .core.humans import simulate_humans
 from .core.models import generate_models, simulate_model_attempts
-from .core.detection import apply_detection_models
-from .pipeline import sample_humans_posterior, sample_models_posterior, sample_trend_posterior
+from .core.tasks import generate_tasks
 from .gates import (
     delta50_in_range_gate,
     delta50_precision_gate,
     trend_recovery_rope_gate,
 )
-from .assurance import assurance_all_gates
+from .pipeline import sample_humans_posterior, sample_models_posterior, sample_trend_posterior
 
 
 def _mix_seed(base_seed: int, a: int, b: int) -> int:
@@ -78,16 +78,24 @@ def _compute_cost(
     prep_hours = float(task_prep_hours_per_task) * tasks_per_bin * n_t_bins
     cost_prep = prep_hours * float(human_hourly_rate)
     total = float(cost_human + cost_model + cost_prep)
-    return dict(cost_total=total, cost_human=float(cost_human), cost_model=float(cost_model), cost_prep=float(cost_prep))
+    return dict(
+        cost_total=total,
+        cost_human=float(cost_human),
+        cost_model=float(cost_model),
+        cost_prep=float(cost_prep),
+    )
 
 
 def _active_gate_keys(gates: Dict[str, Any]) -> List[str]:
     keys: List[str] = []
     if str(gates.get("delta50_max_ci_width_s", "nan")) != "nan":
         keys.append("delta50_precision")
-    if True:  # in-range uses observed Δ from attempts; always tracked if attempts exist
-        keys.append("delta50_in_range")
-    if str(gates.get("delta50_true_doubling_months", "nan")) != "nan" or str(gates.get("true_doubling_months", "nan")) != "nan":
+    # Δ50 in-range uses observed Δ from attempts; always tracked if attempts exist
+    keys.append("delta50_in_range")
+    if (
+        str(gates.get("delta50_true_doubling_months", "nan")) != "nan"
+        or str(gates.get("true_doubling_months", "nan")) != "nan"
+    ):
         keys.append("delta50_trend_rope")
     return keys
 
@@ -96,7 +104,10 @@ def _fallback_minutes_per_run(cfg: SimConfig) -> float:
     # 2*T_median + Δ_median (seconds) → minutes
     t_med = math.sqrt(float(cfg.t_seconds_min) * float(cfg.t_seconds_max))
     if cfg.c_over_bins:
-        mids = [math.sqrt(float(b.get("lo_s", 1.0)) * float(b.get("hi_s", 1.0))) for b in cfg.c_over_bins]
+        mids = [
+            math.sqrt(float(b.get("lo_s", 1.0)) * float(b.get("hi_s", 1.0)))
+            for b in cfg.c_over_bins
+        ]
         d_med = float(np.median(mids)) if mids else 0.0
     else:
         d_med = 0.0
@@ -198,7 +209,11 @@ def _eval_candidate_seed(
             },
         )
         rel_map = {m["model_id"]: int(m.get("release_month", 0)) for m in models_list}
-        trend = sample_trend_posterior(m_draws, rel_map, priors={"seed": cfg.seed, "num_warmup_trend": 200, "num_samples_trend": 200})
+        trend = sample_trend_posterior(
+            m_draws,
+            rel_map,
+            priors={"seed": cfg.seed, "num_warmup_trend": 200, "num_samples_trend": 200},
+        )
 
         # Gates
         g_pass: Dict[str, bool] = {}
@@ -223,17 +238,28 @@ def _eval_candidate_seed(
         if series is not None:
             lo_d = float(np.nanmin(series))
             hi_d = float(np.nanmax(series))
-            min_frac = float(gates.get("d50_min_fraction_in_range", gates.get("delta50_min_fraction_in_range", 0.8)))
+            min_frac = float(
+                gates.get(
+                    "d50_min_fraction_in_range", gates.get("delta50_min_fraction_in_range", 0.8)
+                )
+            )
             pass_any = False
             for arr in (m_draws.get("delta50_s_draws", {}) or {}).values():
-                g = delta50_in_range_gate(np.asarray(arr, float), min_delta_seconds=lo_d, max_delta_seconds=hi_d, min_fraction_in_range=min_frac)
+                g = delta50_in_range_gate(
+                    np.asarray(arr, float),
+                    min_delta_seconds=lo_d,
+                    max_delta_seconds=hi_d,
+                    min_fraction_in_range=min_frac,
+                )
                 if bool(g.get("pass_", False)):
                     pass_any = True
                     break
             g_pass["delta50_in_range"] = pass_any
 
         # Trend recovery (ROPE), if true dm provided
-        true_dm = float(gates.get("delta50_true_doubling_months", gates.get("true_doubling_months", math.nan)))
+        true_dm = float(
+            gates.get("delta50_true_doubling_months", gates.get("true_doubling_months", math.nan))
+        )
         if math.isfinite(true_dm):
             mon_id = mon.id
             info = (trend.get("trend", {}) or {}).get(mon_id, {})
@@ -243,7 +269,9 @@ def _eval_candidate_seed(
                 rel_factor=float(gates.get("delta50_dm_rel_factor", 1.33)),
                 min_prob_in_window=float(gates.get("delta50_dm_min_prob_in_window", 0.6)),
                 rel_width_max=(
-                    float(gates["delta50_dm_rel_width_max"]) if str(gates.get("delta50_dm_rel_width_max", "nan")) != "nan" else None
+                    float(gates["delta50_dm_rel_width_max"])
+                    if str(gates.get("delta50_dm_rel_width_max", "nan")) != "nan"
+                    else None
                 ),
             )
             g_pass["delta50_trend_rope"] = bool(rope.get("pass_", False))
@@ -271,8 +299,12 @@ def _compute_pareto(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 continue
             # q dominates r if cost_total <= and assurance >= with at least one strict
             if (
-                float(q["cost_total"]) <= float(r["cost_total"]) and float(q["assurance"]) >= float(r["assurance"]) and (
-                    float(q["cost_total"]) < float(r["cost_total"]) or float(q["assurance"]) > float(r["assurance"]) )
+                float(q["cost_total"]) <= float(r["cost_total"])
+                and float(q["assurance"]) >= float(r["assurance"])
+                and (
+                    float(q["cost_total"]) < float(r["cost_total"])
+                    or float(q["assurance"]) > float(r["assurance"])
+                )
             ):
                 dominated = True
                 break
@@ -281,7 +313,9 @@ def _compute_pareto(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return pareto
 
 
-def _select_min_cost_feasible(rows: List[Dict[str, Any]], assurance_target: float) -> Tuple[Dict[str, Any] | None, bool]:
+def _select_min_cost_feasible(
+    rows: List[Dict[str, Any]], assurance_target: float
+) -> Tuple[Dict[str, Any] | None, bool]:
     """Return (best_row, feasible). If none meet target, return highest assurance and feasible=False."""
     feas = [r for r in rows if float(r["assurance"]) >= float(assurance_target)]
     if feas:
@@ -290,11 +324,13 @@ def _select_min_cost_feasible(rows: List[Dict[str, Any]], assurance_target: floa
     # fallback: highest assurance; break ties by lower cost
     if not rows:
         return None, False
-    best = max(rows, key=lambda r: (float(r["assurance"]), -float(r["cost_total"])) )
+    best = max(rows, key=lambda r: (float(r["assurance"]), -float(r["cost_total"])))
     return best, False
 
 
-def run(scenario_cfg: SimConfig, gates: Dict[str, Any], search_cfg: Dict[str, Any], out_dir: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+def run(
+    scenario_cfg: SimConfig, gates: Dict[str, Any], search_cfg: Dict[str, Any], out_dir: str
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Run automated design search.
 
     - scenario_cfg: base SimConfig for the scenario (will be copied per candidate/seed)
@@ -307,10 +343,16 @@ def run(scenario_cfg: SimConfig, gates: Dict[str, Any], search_cfg: Dict[str, An
     os.makedirs(out_dir, exist_ok=True)
 
     knobs_grid = dict(
-        attempts_per_pair=list(map(int, search_cfg.get("attempts_per_pair", [scenario_cfg.attempts_per_pair]))),
+        attempts_per_pair=list(
+            map(int, search_cfg.get("attempts_per_pair", [scenario_cfg.attempts_per_pair]))
+        ),
         tasks_per_bin=list(map(int, search_cfg.get("tasks_per_bin", [scenario_cfg.tasks_per_bin]))),
-        n_participants=list(map(int, search_cfg.get("n_participants", [scenario_cfg.n_participants]))),
-        repeats_per_condition=list(map(int, search_cfg.get("repeats_per_condition", [scenario_cfg.repeats_per_condition]))),
+        n_participants=list(
+            map(int, search_cfg.get("n_participants", [scenario_cfg.n_participants]))
+        ),
+        repeats_per_condition=list(
+            map(int, search_cfg.get("repeats_per_condition", [scenario_cfg.repeats_per_condition]))
+        ),
     )
     assurance_target = float(search_cfg.get("assurance_target", 0.8))
     n_seeds = int(search_cfg.get("seeds", 5))
@@ -326,6 +368,7 @@ def run(scenario_cfg: SimConfig, gates: Dict[str, Any], search_cfg: Dict[str, An
     candidates = [dict(zip(keys, vals)) for vals in product(*grid_vals)]
 
     import pandas as pd
+
     rows: List[Dict[str, Any]] = []
 
     # Evaluate each candidate; autoparallel over seeds within candidate, fallback to serial if needed
@@ -337,7 +380,9 @@ def run(scenario_cfg: SimConfig, gates: Dict[str, Any], search_cfg: Dict[str, An
         results: List[Tuple[Dict[str, bool], float, int]] = []
         try:
             with ProcessPoolExecutor(max_workers=os.cpu_count() or 1) as ex:
-                futs = [ex.submit(_eval_candidate_seed, scenario_cfg, cand, gates, s) for s in seed_list]
+                futs = [
+                    ex.submit(_eval_candidate_seed, scenario_cfg, cand, gates, s) for s in seed_list
+                ]
                 for f in as_completed(futs):
                     results.append(f.result())
         except Exception:
@@ -362,11 +407,17 @@ def run(scenario_cfg: SimConfig, gates: Dict[str, Any], search_cfg: Dict[str, An
             model_cost_per_attempt,
         )
 
+        # Extract typed values from assurance aggregate
+        a_val = ag.get("assurance")
+        per_gate = ag.get("per_gate_rate")
+        a_float = float(a_val) if isinstance(a_val, (int, float)) else float("nan")
+        per_gate_dict: dict[str, float] = per_gate if isinstance(per_gate, dict) else {}
+
         row: Dict[str, Any] = {
             **{k: int(cand[k]) for k in keys},
-            "assurance": float(ag.get("assurance", float("nan"))),
+            "assurance": a_float,
             "seeds": int(len(pass_records)),
-            **{f"gate_{k}_rate": float(v) for k, v in (ag.get("per_gate_rate") or {}).items()},
+            **{f"gate_{k}_rate": float(v) for k, v in per_gate_dict.items()},
             **costs,
         }
         rows.append(row)
@@ -384,7 +435,9 @@ def run(scenario_cfg: SimConfig, gates: Dict[str, Any], search_cfg: Dict[str, An
         "design": {k: int(best[k]) for k in keys} if best else {},
         "assurance": float(best["assurance"]) if best else float("nan"),
         "feasible": bool(feasible and best is not None),
-        "cost": {k: float(best[k]) for k in ("cost_total", "cost_human", "cost_model", "cost_prep")} if best else {},
+        "cost": {k: float(best[k]) for k in ("cost_total", "cost_human", "cost_model", "cost_prep")}
+        if best
+        else {},
     }
     (Path(out_dir) / "best_design.json").write_text(json.dumps(best_json, indent=2))
 

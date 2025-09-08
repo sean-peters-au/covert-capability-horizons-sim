@@ -11,6 +11,7 @@ def numpyro_available():
     try:
         import numpyro  # noqa: F401
         import arviz  # noqa: F401
+
         return True
     except Exception:
         return False
@@ -19,6 +20,7 @@ def numpyro_available():
 def test_stage2_delta50_recovery_from_attempts():
     if not numpyro_available():
         import pytest
+
         pytest.skip("NumPyro/ArviZ not installed in test env")
 
     from cch_sim.pipeline import sample_models_posterior
@@ -35,13 +37,15 @@ def test_stage2_delta50_recovery_from_attempts():
     ps = 1.0 / (1.0 + np.exp(-logits))
     ys = (rng.random(xs.shape[0]) < ps).astype(int)
 
-    attempts = pd.DataFrame({
-        "monitor_id": ["M0"] * xs.shape[0],
-        "model_id": ["m0"] * xs.shape[0],
-        "task_id": ["T0"] * xs.shape[0],
-        "d_seconds": xs,
-        "success": ys,
-    })
+    attempts = pd.DataFrame(
+        {
+            "monitor_id": ["M0"] * xs.shape[0],
+            "model_id": ["m0"] * xs.shape[0],
+            "task_id": ["T0"] * xs.shape[0],
+            "d_seconds": xs,
+            "success": ys,
+        }
+    )
 
     # Provide minimal Stage-1 draws (only used to compute H50; we test Δ50 here)
     S = 800
@@ -54,7 +58,14 @@ def test_stage2_delta50_recovery_from_attempts():
     draws_m = sample_models_posterior(
         attempts,
         humans_draws,
-        priors=dict(seed=0, num_warmup=600, num_samples=800, num_chains=1, target_accept=0.95, max_tree_depth=14),
+        priors=dict(
+            seed=0,
+            num_warmup=600,
+            num_samples=800,
+            num_chains=1,
+            target_accept=0.95,
+            max_tree_depth=14,
+        ),
     )
 
     key = "M0:m0"

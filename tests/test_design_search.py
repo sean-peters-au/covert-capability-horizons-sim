@@ -7,7 +7,7 @@ def test_pareto_frontier_simple():
     rows = [
         {"cost_total": 100, "assurance": 0.7, "id": 0},
         {"cost_total": 120, "assurance": 0.9, "id": 1},
-        {"cost_total": 80,  "assurance": 0.6, "id": 2},
+        {"cost_total": 80, "assurance": 0.6, "id": 2},
         {"cost_total": 120, "assurance": 0.7, "id": 3},
     ]
     pareto = compute_pareto(rows)
@@ -20,7 +20,10 @@ def test_select_min_cost_feasible_and_fallback():
     rows = [
         {"cost_total": 100, "assurance": 0.75},
         {"cost_total": 150, "assurance": 0.8},  # feasible
-        {"cost_total": 140, "assurance": 0.85}, # feasible and cheaper than any higher assurance? actually cheaper than 150? no, 140 < 150 -> should win
+        {
+            "cost_total": 140,
+            "assurance": 0.85,
+        },  # feasible and cheaper than any higher assurance? actually cheaper than 150? no, 140 < 150 -> should win
     ]
     best, feasible = select_min_cost_feasible(rows, assurance_target=0.8)
     assert feasible is True

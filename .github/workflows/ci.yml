@@ -30,6 +30,14 @@ jobs:
       - name: Sync dependencies
         run: uv sync --frozen
 
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Mypy type check
+        run: uv run -m mypy src
+
       - name: Run tests
         run: uv run -m pytest -q
-

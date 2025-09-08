@@ -7,6 +7,9 @@ help:
 	@echo "  make py     # ensure Python $(PY) via uv"
 	@echo "  make lock   # uv lock deps"
 	@echo "  make sync   # create .venv and install"
+	@echo "  make format # run ruff formatter"
+	@echo "  make lint   # run ruff lints"
+	@echo "  make typecheck # run mypy on src"
 	@echo "  make test   # run pytest"
 	@echo "  make run    # example simulate run"
 	@echo "  make sweep  # example sweep run"
@@ -20,6 +23,17 @@ lock: py
 
 sync: py
 	uv sync
+
+format:
+	uv run ruff format .
+
+lint:
+	uv run ruff format .
+	uv run ruff check . --fix
+	uv run ruff check .
+
+typecheck:
+	uv run -m mypy src
 
 test:
 	uv run -m pytest -q

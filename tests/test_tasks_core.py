@@ -52,4 +52,3 @@ def test_c_overhead_sampling_uniform_vs_log_uniform():
     # Uniform median near ~50, log-uniform median near ~10
     assert med_u > med_l
     assert med_u > 30 and med_l < 20
-

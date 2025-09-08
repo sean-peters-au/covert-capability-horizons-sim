@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+
 import numpy as np
 
 
@@ -26,4 +27,3 @@ def band_for_seconds(sec: float) -> str:
     if sec < 600.0:
         return "med"
     return "long"
-

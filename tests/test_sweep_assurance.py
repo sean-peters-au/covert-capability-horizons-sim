@@ -15,26 +15,49 @@ def test_sweep_writes_assurance_files_with_expected_content(tmp_path, monkeypatc
 
     # Monkeypatch heavy functions with lightweight fakes
     monkeypatch.setattr(cli_mod, "generate_tasks", lambda **kw: pd.DataFrame({"task_id": ["T0"]}))
-    monkeypatch.setattr(cli_mod, "simulate_humans", lambda **kw: pd.DataFrame({"participant_id": ["P0"], "task_id": ["T0"], "condition": ["T"], "log_t_obs": [1.0], "censored": [0]}))
+    monkeypatch.setattr(
+        cli_mod,
+        "simulate_humans",
+        lambda **kw: pd.DataFrame(
+            {
+                "participant_id": ["P0"],
+                "task_id": ["T0"],
+                "condition": ["T"],
+                "log_t_obs": [1.0],
+                "censored": [0],
+            }
+        ),
+    )
 
     # Stage 1 posterior: 1 task, 16 draws
     def fake_sample_humans_posterior(humans, priors=None):
         S = 16
-        return {"tasks": ["T0"], "draws": S, "tT_s": np.full((1, S), 900.0), "Delta_s": np.full((1, S), 100.0)}
+        return {
+            "tasks": ["T0"],
+            "draws": S,
+            "tT_s": np.full((1, S), 900.0),
+            "Delta_s": np.full((1, S), 100.0),
+        }
+
     monkeypatch.setattr(cli_mod, "sample_humans_posterior", fake_sample_humans_posterior)
 
     # Models list
-    monkeypatch.setattr(cli_mod, "generate_models", lambda cfg, rng: [dict(model_id="m0", release_month=202401)])
+    monkeypatch.setattr(
+        cli_mod, "generate_models", lambda cfg, rng: [dict(model_id="m0", release_month=202401)]
+    )
 
     # Attempts: ensure d_seconds has a range to evaluate Δ50 in-range
     def fake_attempts(**kw):
-        return pd.DataFrame({
-            "model_id": ["m0", "m0"],
-            "task_id": ["T0", "T0"],
-            "runtime_s": [10.0, 10.0],
-            "d_seconds": [400.0, 800.0],
-            "success": [1, 0],
-        })
+        return pd.DataFrame(
+            {
+                "model_id": ["m0", "m0"],
+                "task_id": ["T0", "T0"],
+                "runtime_s": [10.0, 10.0],
+                "d_seconds": [400.0, 800.0],
+                "success": [1, 0],
+            }
+        )
+
     monkeypatch.setattr(cli_mod, "simulate_model_attempts", lambda **kw: fake_attempts())
     monkeypatch.setattr(cli_mod, "apply_detection_models", lambda df, mon: df)
 
@@ -43,6 +66,7 @@ def test_sweep_writes_assurance_files_with_expected_content(tmp_path, monkeypatc
         key = "M0:m0"
         d50 = np.full(32, 600.0)
         return {"delta50_s_draws": {key: d50}}
+
     monkeypatch.setattr(cli_mod, "sample_models_posterior", fake_sample_models_posterior)
 
     # No trend needed
@@ -62,7 +86,9 @@ def test_sweep_writes_assurance_files_with_expected_content(tmp_path, monkeypatc
                     "c_over_bins": [{"lo_s": 5, "hi_s": 10}],
                     "c_over_mix_by_t_bin": [[1.0]],
                     "models_mode": "custom",
-                    "models": [{"model_id": "m0", "release_month": 202401, "ability_seconds": 100.0}],
+                    "models": [
+                        {"model_id": "m0", "release_month": 202401, "ability_seconds": 100.0}
+                    ],
                     "monitors": [{"id": "M0"}],
                     "attempts_per_pair": 1,
                 },

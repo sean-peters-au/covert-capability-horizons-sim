@@ -27,6 +27,12 @@ test = [
 test = [
   "pytest>=8.2,<9.0",
 ]
+lint = [
+  "ruff>=0.5.0",
+]
+typecheck = [
+  "mypy>=1.10.0",
+]
 
 [project.scripts]
 cch-sim = "cch_sim.cli:main"
@@ -36,5 +42,50 @@ requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-default-groups = ["test"]
+default-groups = ["test", "lint", "typecheck"]
 package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "I"    # import sorting
+]
+ignore = [
+  "E501", # line length handled by formatter preference
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = [
+  "E402",  # module import not at top of file (tests edit sys.path)
+  "I001",  # import sorting noise in tests
+  "F401",  # unused imports in tests
+  "NPY002",# legacy np.random usage in tests
+  "E501",  # long lines in tests (comments)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cch_sim"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+check_untyped_defs = true
+no_implicit_optional = true
+disallow_any_generics = false
+ignore_missing_imports = true
+strict_equality = true
+namespace_packages = true
+show_error_codes = true
+pretty = true

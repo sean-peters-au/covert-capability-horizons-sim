@@ -1,8 +1,10 @@
 """Trend utilities: simple OLS trend on log(H50 seconds)."""
+
 from __future__ import annotations
 
-from typing import Dict
 import math
+from typing import Dict
+
 import numpy as np
 
 

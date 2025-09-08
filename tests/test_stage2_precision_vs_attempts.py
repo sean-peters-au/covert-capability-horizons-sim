@@ -11,6 +11,7 @@ def numpyro_available():
     try:
         import numpyro  # noqa: F401
         import arviz  # noqa: F401
+
         return True
     except Exception:
         return False
@@ -19,6 +20,7 @@ def numpyro_available():
 def test_delta50_precision_improves_with_more_attempts():
     if not numpyro_available():
         import pytest
+
         pytest.skip("NumPyro/ArviZ not installed in test env")
 
     from cch_sim.pipeline import sample_models_posterior
@@ -33,13 +35,15 @@ def test_delta50_precision_improves_with_more_attempts():
         logits = theta0_true + theta1_true * xs
         ps = 1.0 / (1.0 + np.exp(-logits))
         ys = (rng.random(xs.shape[0]) < ps).astype(int)
-        return pd.DataFrame({
-            "monitor_id": ["M0"] * xs.shape[0],
-            "model_id": ["m0"] * xs.shape[0],
-            "task_id": ["T0"] * xs.shape[0],
-            "d_seconds": xs,
-            "success": ys,
-        })
+        return pd.DataFrame(
+            {
+                "monitor_id": ["M0"] * xs.shape[0],
+                "model_id": ["m0"] * xs.shape[0],
+                "task_id": ["T0"] * xs.shape[0],
+                "d_seconds": xs,
+                "success": ys,
+            }
+        )
 
     # Provide minimal Stage-1 draws (unused for Δ50 estimation)
     S = 400
@@ -51,15 +55,30 @@ def test_delta50_precision_improves_with_more_attempts():
     draws_small = sample_models_posterior(
         small,
         humans_draws,
-        priors=dict(seed=0, num_warmup=400, num_samples=600, num_chains=1, target_accept=0.95, max_tree_depth=14),
+        priors=dict(
+            seed=0,
+            num_warmup=400,
+            num_samples=600,
+            num_chains=1,
+            target_accept=0.95,
+            max_tree_depth=14,
+        ),
     )
     draws_big = sample_models_posterior(
         big,
         humans_draws,
-        priors=dict(seed=1, num_warmup=400, num_samples=600, num_chains=1, target_accept=0.95, max_tree_depth=14),
+        priors=dict(
+            seed=1,
+            num_warmup=400,
+            num_samples=600,
+            num_chains=1,
+            target_accept=0.95,
+            max_tree_depth=14,
+        ),
     )
 
     import numpy as _np
+
     d50_small = _np.asarray(draws_small["delta50_s_draws"]["M0:m0"], float)
     d50_big = _np.asarray(draws_big["delta50_s_draws"]["M0:m0"], float)
     w_small = float(_np.percentile(d50_small, 97.5) - _np.percentile(d50_small, 2.5))
@@ -69,4 +88,3 @@ def test_delta50_precision_improves_with_more_attempts():
     assert w_big < w_small
     # And typically a substantial reduction
     assert w_big <= 0.9 * w_small
-

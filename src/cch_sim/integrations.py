@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from typing import Dict, List
-from pathlib import Path
 import json
+from pathlib import Path
+from typing import Dict, List
+
 import pandas as pd
+
 from .assurance import assurance_all_gates
 
 
-def aggregate_assurance_for_design(design_id: str, pass_records: List[Dict[str, bool]]) -> Dict[str, object]:
+def aggregate_assurance_for_design(
+    design_id: str, pass_records: List[Dict[str, bool]]
+) -> Dict[str, object]:
     """Aggregate assurance for a single design from per-seed gate pass records.
 
     Returns a flat dict suitable for CSV/JSON rows.
@@ -25,7 +29,9 @@ def aggregate_assurance_for_design(design_id: str, pass_records: List[Dict[str, 
     return row
 
 
-def aggregate_assurance_table(design_records: Dict[str, List[Dict[str, bool]]]) -> List[Dict[str, object]]:
+def aggregate_assurance_table(
+    design_records: Dict[str, List[Dict[str, bool]]],
+) -> List[Dict[str, object]]:
     """Aggregate assurance rows for multiple designs.
 
     Returns a list of flat rows suitable for CSV/JSON.
@@ -36,7 +42,9 @@ def aggregate_assurance_table(design_records: Dict[str, List[Dict[str, bool]]]) 
     return rows
 
 
-def write_assurance_table(rows: List[Dict[str, object]], out_dir: str | Path, basename: str = "assurance") -> Dict[str, str]:
+def write_assurance_table(
+    rows: List[Dict[str, object]], out_dir: str | Path, basename: str = "assurance"
+) -> Dict[str, str]:
     """Write assurance rows to CSV and JSON; returns paths written."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
